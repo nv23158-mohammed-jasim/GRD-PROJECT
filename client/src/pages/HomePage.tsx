@@ -20,6 +20,7 @@ import {
   Play,
   TrendingUp,
   Award,
+  Gamepad2,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -42,6 +43,7 @@ export default function HomePage() {
   const menuItems = [
     { icon: Home, label: "Home", path: "/" },
     { icon: Play, label: "Start Workout", path: "/select-exercise" },
+    { icon: Gamepad2, label: "Game Mode", path: "/game" },
     { icon: History, label: "Workout History", path: "/" },
   ];
 
@@ -101,15 +103,27 @@ export default function HomePage() {
             <p className="text-muted-foreground mb-6">
               Track your push-ups and squats with real-time pose detection
             </p>
-            <Button
-              size="lg"
-              className="px-8 py-6 text-lg"
-              onClick={() => setLocation("/select-exercise")}
-              data-testid="button-start-workout-hero"
-            >
-              <Play className="w-5 h-5 mr-2" />
-              Start Workout
-            </Button>
+            <div className="flex flex-wrap gap-4 justify-center">
+              <Button
+                size="lg"
+                className="px-8 py-6 text-lg"
+                onClick={() => setLocation("/select-exercise")}
+                data-testid="button-start-workout-hero"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Start Workout
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="px-8 py-6 text-lg"
+                onClick={() => setLocation("/game")}
+                data-testid="button-game-mode-hero"
+              >
+                <Gamepad2 className="w-5 h-5 mr-2" />
+                Game Mode
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

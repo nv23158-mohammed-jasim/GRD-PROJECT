@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/HomePage";
 import SelectExercisePage from "@/pages/SelectExercisePage";
 import ExercisePage from "@/pages/ExercisePage";
+import GamePage from "@/pages/GamePage";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/select-exercise" component={SelectExercisePage} />
       <Route path="/exercise/:type/:difficulty/:intensity" component={ExercisePage} />
+      <Route path="/game" component={GamePage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -60,11 +60,15 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   // Exercise state tracking
   const exercisePhaseRef = useRef<"up" | "down">("up");
   const countingEnabledRef = useRef(false);
-  const valueBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
+  const valueBufferRef = useRef<ValueBuffer>(createValueBuffer(7));
   
   // For squats: track initial standing hip position
   const standingHipRatioRef = useRef<number | null>(null);
   const calibrationFramesRef = useRef<number>(0);
+  
+  // Prevent double counting - minimum time between reps
+  const lastRepTimeRef = useRef<number>(0);
+  const MIN_REP_INTERVAL = 400; // milliseconds
 
   // Calculate angle between 3 points
   const calculateAngle = (
@@ -146,17 +150,23 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       const smoothedAngle = addToBuffer(valueBufferRef.current, angle);
       setDebugInfo(`Elbow: ${Math.round(smoothedAngle)}°`);
       
-      // Pushup thresholds
-      const downThreshold = 100;
-      const upThreshold = 140;
+      // Pushup thresholds - more forgiving
+      const downThreshold = 110;
+      const upThreshold = 135;
+      
+      const now = Date.now();
       
       if (exercisePhaseRef.current === "up" && smoothedAngle < downThreshold) {
         exercisePhaseRef.current = "down";
         setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && smoothedAngle > upThreshold) {
-        exercisePhaseRef.current = "up";
-        setExercisePhase("up");
-        setRepCount(prev => prev + 1);
+        // Check cooldown to prevent double counting
+        if (now - lastRepTimeRef.current >= MIN_REP_INTERVAL) {
+          exercisePhaseRef.current = "up";
+          setExercisePhase("up");
+          lastRepTimeRef.current = now;
+          setRepCount(prev => prev + 1);
+        }
       }
       
     } else {
@@ -208,19 +218,25 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       setDebugInfo(`Depth: ${(depthChange * 100).toFixed(0)}%`);
       
-      // Thresholds based on depth change from standing
-      // Down: hip drops by 15% or more
-      // Up: hip returns to within 8% of standing position
-      const downThreshold = 0.15;
-      const upThreshold = 0.08;
+      // Thresholds based on depth change from standing - more forgiving
+      // Down: hip drops by 12% or more
+      // Up: hip returns to within 6% of standing position
+      const downThreshold = 0.12;
+      const upThreshold = 0.06;
+      
+      const now = Date.now();
       
       if (exercisePhaseRef.current === "up" && depthChange > downThreshold) {
         exercisePhaseRef.current = "down";
         setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && depthChange < upThreshold) {
-        exercisePhaseRef.current = "up";
-        setExercisePhase("up");
-        setRepCount(prev => prev + 1);
+        // Check cooldown to prevent double counting
+        if (now - lastRepTimeRef.current >= MIN_REP_INTERVAL) {
+          exercisePhaseRef.current = "up";
+          setExercisePhase("up");
+          lastRepTimeRef.current = now;
+          setRepCount(prev => prev + 1);
+        }
       }
     }
   }, [exerciseType]);
@@ -417,9 +433,10 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     countingEnabledRef.current = true;
     exercisePhaseRef.current = "up";
     setExercisePhase("up");
-    valueBufferRef.current = createValueBuffer(5);
+    valueBufferRef.current = createValueBuffer(7);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
+    lastRepTimeRef.current = 0;
     setIsCountingEnabled(true);
   }, []);
 
@@ -432,9 +449,10 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     setRepCount(0);
     exercisePhaseRef.current = "up";
     setExercisePhase("up");
-    valueBufferRef.current = createValueBuffer(5);
+    valueBufferRef.current = createValueBuffer(7);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
+    lastRepTimeRef.current = 0;
   }, []);
 
   useEffect(() => {
