@@ -1,176 +1,131 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
+import * as tf from "@tensorflow/tfjs";
 import * as poseDetection from "@tensorflow-models/pose-detection";
-import "@tensorflow/tfjs";
 
 export type ExerciseType = "pushups" | "squats";
-
-interface PosePoint {
-  x: number;
-  y: number;
-  score?: number;
-  name?: string;
-}
 
 interface UsePoseDetectionResult {
   videoRef: React.RefObject<HTMLVideoElement>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
-  isBodyDetected: boolean;
   isLoading: boolean;
+  loadingStatus: string;
   error: string | null;
+  isBodyDetected: boolean;
   repCount: number;
-  resetRepCount: () => void;
-  keypoints: PosePoint[];
+  isCountingEnabled: boolean;
   startCamera: () => Promise<void>;
   stopCamera: () => void;
-  setCountingEnabled: (enabled: boolean) => void;
+  enableCounting: () => void;
+  disableCounting: () => void;
+  resetReps: () => void;
 }
 
 export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionResult {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
-  const animationRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const isRunningRef = useRef(false);
   
-  const [isBodyDetected, setIsBodyDetected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState("Initializing...");
   const [error, setError] = useState<string | null>(null);
+  const [isBodyDetected, setIsBodyDetected] = useState(false);
   const [repCount, setRepCount] = useState(0);
-  const [keypoints, setKeypoints] = useState<PosePoint[]>([]);
+  const [isCountingEnabled, setIsCountingEnabled] = useState(false);
   
-  // Track exercise state for rep counting
-  const exerciseStateRef = useRef<"up" | "down">("up");
-  // Track whether counting is enabled
+  // Exercise state tracking
+  const exercisePhaseRef = useRef<"up" | "down">("up");
   const countingEnabledRef = useRef(false);
-  
-  const resetRepCount = useCallback(() => {
-    setRepCount(0);
-    exerciseStateRef.current = "up";
-  }, []);
 
-  const setCountingEnabled = useCallback((enabled: boolean) => {
-    countingEnabledRef.current = enabled;
-    if (enabled) {
-      // Reset state when starting
-      exerciseStateRef.current = "up";
-    }
-  }, []);
-
-  // Get angle between three points
-  const getAngle = (a: PosePoint, b: PosePoint, c: PosePoint): number => {
-    const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+  // Calculate angle between 3 points
+  const calculateAngle = (
+    p1: { x: number; y: number },
+    p2: { x: number; y: number },
+    p3: { x: number; y: number }
+  ): number => {
+    const radians = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
     let angle = Math.abs((radians * 180) / Math.PI);
     if (angle > 180) angle = 360 - angle;
     return angle;
   };
 
-  // Check if keypoint is valid (has good confidence)
-  const isValidKeypoint = (kp: PosePoint | undefined): boolean => {
-    return kp !== undefined && (kp.score ?? 0) > 0.3;
-  };
-
-  // Count reps based on exercise type
-  const countReps = useCallback((poses: poseDetection.Pose[]) => {
-    // Only count reps when counting is enabled
+  // Process pose for rep counting
+  const processPose = useCallback((keypoints: poseDetection.Keypoint[]) => {
     if (!countingEnabledRef.current) return;
-    if (poses.length === 0) return;
     
-    const pose = poses[0];
-    const kp = pose.keypoints;
+    const getPoint = (name: string) => keypoints.find(k => k.name === name);
+    const isValid = (p: poseDetection.Keypoint | undefined) => p && (p.score ?? 0) > 0.3;
     
-    // Get keypoints by name
-    const getKp = (name: string) => kp.find(k => k.name === name);
+    let currentAngle = 180;
     
     if (exerciseType === "pushups") {
-      // Track pushups using elbow angle
-      const leftShoulder = getKp("left_shoulder");
-      const leftElbow = getKp("left_elbow");
-      const leftWrist = getKp("left_wrist");
-      const rightShoulder = getKp("right_shoulder");
-      const rightElbow = getKp("right_elbow");
-      const rightWrist = getKp("right_wrist");
+      // Use elbow angle for pushups
+      const shoulder = getPoint("left_shoulder") || getPoint("right_shoulder");
+      const elbow = getPoint("left_elbow") || getPoint("right_elbow");
+      const wrist = getPoint("left_wrist") || getPoint("right_wrist");
       
-      // Use whichever arm has better visibility
-      let angle = 180;
-      
-      if (isValidKeypoint(leftShoulder) && isValidKeypoint(leftElbow) && isValidKeypoint(leftWrist)) {
-        angle = Math.min(angle, getAngle(leftShoulder!, leftElbow!, leftWrist!));
-      }
-      if (isValidKeypoint(rightShoulder) && isValidKeypoint(rightElbow) && isValidKeypoint(rightWrist)) {
-        angle = Math.min(angle, getAngle(rightShoulder!, rightElbow!, rightWrist!));
+      if (isValid(shoulder) && isValid(elbow) && isValid(wrist)) {
+        currentAngle = calculateAngle(shoulder!, elbow!, wrist!);
       }
       
-      // Pushup: down when elbow angle < 100, up when > 160
-      if (angle < 100 && exerciseStateRef.current === "up") {
-        exerciseStateRef.current = "down";
-      } else if (angle > 160 && exerciseStateRef.current === "down") {
-        exerciseStateRef.current = "up";
+      // Pushup: down when elbow < 90, up when > 150
+      if (currentAngle < 90 && exercisePhaseRef.current === "up") {
+        exercisePhaseRef.current = "down";
+      } else if (currentAngle > 150 && exercisePhaseRef.current === "down") {
+        exercisePhaseRef.current = "up";
         setRepCount(prev => prev + 1);
       }
-    } else if (exerciseType === "squats") {
-      // Track squats using knee angle
-      const leftHip = getKp("left_hip");
-      const leftKnee = getKp("left_knee");
-      const leftAnkle = getKp("left_ankle");
-      const rightHip = getKp("right_hip");
-      const rightKnee = getKp("right_knee");
-      const rightAnkle = getKp("right_ankle");
+    } else {
+      // Use knee angle for squats
+      const hip = getPoint("left_hip") || getPoint("right_hip");
+      const knee = getPoint("left_knee") || getPoint("right_knee");
+      const ankle = getPoint("left_ankle") || getPoint("right_ankle");
       
-      let angle = 180;
-      
-      if (isValidKeypoint(leftHip) && isValidKeypoint(leftKnee) && isValidKeypoint(leftAnkle)) {
-        angle = Math.min(angle, getAngle(leftHip!, leftKnee!, leftAnkle!));
-      }
-      if (isValidKeypoint(rightHip) && isValidKeypoint(rightKnee) && isValidKeypoint(rightAnkle)) {
-        angle = Math.min(angle, getAngle(rightHip!, rightKnee!, rightAnkle!));
+      if (isValid(hip) && isValid(knee) && isValid(ankle)) {
+        currentAngle = calculateAngle(hip!, knee!, ankle!);
       }
       
-      // Squat: down when knee angle < 100, up when > 160
-      if (angle < 100 && exerciseStateRef.current === "up") {
-        exerciseStateRef.current = "down";
-      } else if (angle > 160 && exerciseStateRef.current === "down") {
-        exerciseStateRef.current = "up";
+      // Squat: down when knee < 100, up when > 150
+      if (currentAngle < 100 && exercisePhaseRef.current === "up") {
+        exercisePhaseRef.current = "down";
+      } else if (currentAngle > 150 && exercisePhaseRef.current === "down") {
+        exercisePhaseRef.current = "up";
         setRepCount(prev => prev + 1);
       }
     }
   }, [exerciseType]);
 
   // Draw skeleton on canvas
-  const drawSkeleton = useCallback((poses: poseDetection.Pose[], canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
+  const drawSkeleton = useCallback((keypoints: poseDetection.Keypoint[], canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    if (poses.length === 0) return;
-    
-    const pose = poses[0];
-    const kps = pose.keypoints;
-    
-    // Skeleton connections
-    const connections: [string, string][] = [
-      ["nose", "left_eye"], ["nose", "right_eye"],
-      ["left_eye", "left_ear"], ["right_eye", "right_ear"],
+    // Connections to draw
+    const connections = [
       ["left_shoulder", "right_shoulder"],
-      ["left_shoulder", "left_elbow"], ["right_shoulder", "right_elbow"],
-      ["left_elbow", "left_wrist"], ["right_elbow", "right_wrist"],
+      ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
+      ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
       ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
       ["left_hip", "right_hip"],
-      ["left_hip", "left_knee"], ["right_hip", "right_knee"],
-      ["left_knee", "left_ankle"], ["right_knee", "right_ankle"],
+      ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
+      ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
     ];
     
-    // Draw connections
-    ctx.strokeStyle = "#ff3333";
-    ctx.lineWidth = 4;
+    const getPoint = (name: string) => keypoints.find(k => k.name === name);
     
-    connections.forEach(([p1Name, p2Name]) => {
-      const p1 = kps.find(k => k.name === p1Name);
-      const p2 = kps.find(k => k.name === p2Name);
-      
+    // Draw lines
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 3;
+    
+    connections.forEach(([a, b]) => {
+      const p1 = getPoint(a);
+      const p2 = getPoint(b);
       if (p1 && p2 && (p1.score ?? 0) > 0.3 && (p2.score ?? 0) > 0.3) {
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
@@ -179,11 +134,11 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       }
     });
     
-    // Draw keypoints
-    kps.forEach(kp => {
+    // Draw points
+    keypoints.forEach(kp => {
       if ((kp.score ?? 0) > 0.3) {
         ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
+        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
         ctx.fillStyle = "#ffffff";
         ctx.fill();
         ctx.strokeStyle = "#ff3333";
@@ -194,113 +149,114 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   }, []);
 
   // Detection loop
-  const detect = useCallback(async () => {
-    if (!detectorRef.current || !videoRef.current || !canvasRef.current) return;
+  const runDetection = useCallback(async () => {
+    if (!isRunningRef.current) return;
+    if (!detectorRef.current || !videoRef.current || !canvasRef.current) {
+      animationFrameRef.current = requestAnimationFrame(runDetection);
+      return;
+    }
     
-    if (videoRef.current.readyState >= 2) {
+    const video = videoRef.current;
+    
+    if (video.readyState >= 2) {
       try {
-        const poses = await detectorRef.current.estimatePoses(videoRef.current);
+        const poses = await detectorRef.current.estimatePoses(video);
         
-        // Check if body is detected (enough keypoints with good scores)
-        const validKeypoints = poses[0]?.keypoints.filter(kp => (kp.score ?? 0) > 0.3) ?? [];
-        setIsBodyDetected(validKeypoints.length >= 10);
-        setKeypoints(poses[0]?.keypoints ?? []);
-        
-        // Draw skeleton
-        drawSkeleton(poses, canvasRef.current, videoRef.current);
-        
-        // Count reps (only when counting is enabled)
-        countReps(poses);
-      } catch (err) {
-        console.error("Pose detection error:", err);
+        if (poses.length > 0 && poses[0].keypoints) {
+          const keypoints = poses[0].keypoints;
+          const validPoints = keypoints.filter(k => (k.score ?? 0) > 0.3);
+          
+          setIsBodyDetected(validPoints.length >= 10);
+          drawSkeleton(keypoints, canvasRef.current!, video);
+          processPose(keypoints);
+        } else {
+          setIsBodyDetected(false);
+        }
+      } catch (e) {
+        console.error("Detection error:", e);
       }
     }
     
-    animationRef.current = requestAnimationFrame(detect);
-  }, [drawSkeleton, countReps]);
+    animationFrameRef.current = requestAnimationFrame(runDetection);
+  }, [drawSkeleton, processPose]);
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log("Requesting camera access...");
+      // Step 1: Initialize TensorFlow
+      setLoadingStatus("Setting up TensorFlow...");
+      await tf.ready();
+      await tf.setBackend("webgl");
       
-      // Request camera access with fallback options
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: 640, height: 480 },
-          audio: false,
-        });
-      } catch (cameraErr) {
-        // Try with simpler constraints as fallback
-        console.log("Trying fallback camera settings...");
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-      }
+      // Step 2: Get camera
+      setLoadingStatus("Requesting camera access...");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+        audio: false,
+      });
       
-      console.log("Camera access granted");
       streamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        console.log("Video playing");
+        
+        // Wait for video to be ready
+        await new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(reject);
+          };
+          video.onerror = () => reject(new Error("Video failed to load"));
+        });
       }
       
-      console.log("Loading pose detection model (this may take a moment)...");
+      // Step 3: Load pose detection model
+      setLoadingStatus("Loading AI model (may take 10-20 seconds)...");
       
-      // Initialize pose detector with timeout
-      const model = poseDetection.SupportedModels.MoveNet;
-      const detectorConfig: poseDetection.MoveNetModelConfig = {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
-      };
-      
-      // Add a timeout for model loading
-      const modelLoadPromise = poseDetection.createDetector(model, detectorConfig);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Model loading timed out after 30 seconds")), 30000)
+      const detector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+        }
       );
       
-      detectorRef.current = await Promise.race([modelLoadPromise, timeoutPromise]) as poseDetection.PoseDetector;
+      detectorRef.current = detector;
       
-      console.log("Pose detection model loaded successfully");
+      // Step 4: Start detection
+      setLoadingStatus("Starting detection...");
+      isRunningRef.current = true;
+      runDetection();
+      
       setIsLoading(false);
+      setLoadingStatus("");
       
-      // Start detection loop
-      detect();
     } catch (err: any) {
-      console.error("Camera/detector setup error:", err);
+      console.error("Setup error:", err);
       
-      // Provide more specific error messages
-      let errorMessage = "Failed to access camera or initialize pose detection.";
-      
-      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        errorMessage = "Camera permission was denied. Please allow camera access in your browser settings and refresh the page.";
-      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
-        errorMessage = "No camera found. Please connect a camera and try again.";
-      } else if (err?.name === "NotReadableError" || err?.name === "TrackStartError") {
-        errorMessage = "Camera is in use by another application. Please close other apps using the camera and try again.";
-      } else if (err?.name === "OverconstrainedError") {
-        errorMessage = "Camera doesn't support the requested settings. Trying with default settings...";
-      } else if (err?.name === "SecurityError") {
-        errorMessage = "Camera access blocked due to security restrictions. Make sure you're using HTTPS.";
-      } else if (err?.message) {
-        errorMessage = `Camera error: ${err.message}`;
+      let message = "Failed to start camera.";
+      if (err.name === "NotAllowedError") {
+        message = "Camera access was denied. Please allow camera access and reload the page.";
+      } else if (err.name === "NotFoundError") {
+        message = "No camera found. Please connect a camera.";
+      } else if (err.name === "NotReadableError") {
+        message = "Camera is being used by another app. Close other apps and try again.";
+      } else if (err.message) {
+        message = err.message;
       }
       
-      setError(errorMessage);
+      setError(message);
       setIsLoading(false);
     }
-  }, [detect]);
+  }, [runDetection]);
 
   const stopCamera = useCallback(() => {
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
+    isRunningRef.current = false;
+    
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
     
     if (streamRef.current) {
@@ -308,14 +264,26 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       streamRef.current = null;
     }
     
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
     if (detectorRef.current) {
       detectorRef.current.dispose();
       detectorRef.current = null;
     }
+  }, []);
+
+  const enableCounting = useCallback(() => {
+    countingEnabledRef.current = true;
+    exercisePhaseRef.current = "up";
+    setIsCountingEnabled(true);
+  }, []);
+
+  const disableCounting = useCallback(() => {
+    countingEnabledRef.current = false;
+    setIsCountingEnabled(false);
+  }, []);
+
+  const resetReps = useCallback(() => {
+    setRepCount(0);
+    exercisePhaseRef.current = "up";
   }, []);
 
   // Cleanup on unmount
@@ -328,14 +296,16 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   return {
     videoRef,
     canvasRef,
-    isBodyDetected,
     isLoading,
+    loadingStatus,
     error,
+    isBodyDetected,
     repCount,
-    resetRepCount,
-    keypoints,
+    isCountingEnabled,
     startCamera,
     stopCamera,
-    setCountingEnabled,
+    enableCounting,
+    disableCounting,
+    resetReps,
   };
 }

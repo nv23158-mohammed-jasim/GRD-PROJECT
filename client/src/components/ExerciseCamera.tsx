@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { usePoseDetection, type ExerciseType } from "@/hooks/use-pose-detection";
 import { useCreateWorkoutSession } from "@/hooks/use-workout-sessions";
 import { difficultyConfigs, type DifficultyLevel, type Grade } from "@shared/schema";
-import { Check, Loader2, AlertCircle } from "lucide-react";
+import { Check, Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 
@@ -41,112 +41,102 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
   const {
     videoRef,
     canvasRef,
-    isBodyDetected,
     isLoading,
+    loadingStatus,
     error,
+    isBodyDetected,
     repCount,
-    resetRepCount,
     startCamera,
     stopCamera,
-    setCountingEnabled,
+    enableCounting,
+    disableCounting,
+    resetReps,
   } = usePoseDetection(exerciseType);
   
   const createSession = useCreateWorkoutSession();
   
-  const [isStarted, setIsStarted] = useState(false);
+  const [workoutState, setWorkoutState] = useState<"ready" | "active" | "finished">("ready");
   const [timeRemaining, setTimeRemaining] = useState(config.timeLimit);
-  const [isFinished, setIsFinished] = useState(false);
+  const [finalReps, setFinalReps] = useState(0);
   const [grade, setGrade] = useState<Grade | null>(null);
-  const [finalRepCount, setFinalRepCount] = useState(0);
   
-  // Use a ref to track start time for accurate time calculation
-  const startTimeRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<number | null>(null);
 
   // Start camera on mount
   useEffect(() => {
     startCamera();
-    return () => stopCamera();
+    return () => {
+      stopCamera();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [startCamera, stopCamera]);
 
-  // Timer countdown using start time reference for accuracy
-  useEffect(() => {
-    if (!isStarted || isFinished) return;
+  const finishWorkout = useCallback(async (reps: number, elapsed: number) => {
+    disableCounting();
+    setWorkoutState("finished");
+    setFinalReps(reps);
     
-    const interval = setInterval(() => {
-      if (startTimeRef.current === null) return;
-      
-      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      const remaining = Math.max(0, config.timeLimit - elapsed);
-      setTimeRemaining(remaining);
-      
-      if (remaining <= 0) {
-        clearInterval(interval);
-        finishWorkout(elapsed);
-      }
-    }, 100); // Check more frequently for accuracy
-    
-    return () => clearInterval(interval);
-  }, [isStarted, isFinished, config.timeLimit]);
-
-  const finishWorkout = useCallback(async (elapsedSeconds: number) => {
-    // Disable counting immediately
-    setCountingEnabled(false);
-    setIsFinished(true);
-    
-    // Capture the final rep count at this moment
-    const finalReps = repCount;
-    setFinalRepCount(finalReps);
-    
-    const finalGrade = calculateGrade(finalReps, config.targetReps);
+    const finalGrade = calculateGrade(reps, config.targetReps);
     setGrade(finalGrade);
-    
-    // Save workout session with accurate time taken
-    const timeTaken = Math.min(elapsedSeconds, config.timeLimit);
     
     try {
       await createSession.mutateAsync({
         exerciseType,
         difficulty,
         targetReps: config.targetReps,
-        completedReps: finalReps,
+        completedReps: reps,
         timeLimit: config.timeLimit,
-        timeTaken,
+        timeTaken: Math.min(elapsed, config.timeLimit),
         grade: finalGrade,
       });
     } catch (err) {
-      console.error("Failed to save workout:", err);
+      console.error("Failed to save:", err);
     }
-  }, [repCount, config, exerciseType, difficulty, createSession, setCountingEnabled]);
+  }, [config, exerciseType, difficulty, createSession, disableCounting]);
 
   const handleStart = () => {
-    if (isBodyDetected) {
-      // Reset rep count before starting
-      resetRepCount();
-      // Record start time
-      startTimeRef.current = Date.now();
-      // Enable counting
-      setCountingEnabled(true);
-      setIsStarted(true);
+    if (!isBodyDetected) return;
+    
+    resetReps();
+    enableCounting();
+    setWorkoutState("active");
+    startTimeRef.current = Date.now();
+    setTimeRemaining(config.timeLimit);
+    
+    // Start timer
+    timerRef.current = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const remaining = Math.max(0, config.timeLimit - elapsed);
+      setTimeRemaining(remaining);
+      
+      if (remaining <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+      }
+    }, 100);
+  };
+
+  // Watch for timer end
+  useEffect(() => {
+    if (workoutState === "active" && timeRemaining <= 0) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      finishWorkout(repCount, elapsed);
     }
+  }, [timeRemaining, workoutState, repCount, finishWorkout]);
+
+  const handleTryAgain = () => {
+    resetReps();
+    setWorkoutState("ready");
+    setTimeRemaining(config.timeLimit);
+    setGrade(null);
+    setFinalReps(0);
+    startTimeRef.current = 0;
   };
 
   const handleGoHome = () => {
     stopCamera();
     setLocation("/");
-  };
-
-  const handleTryAgain = () => {
-    // Reset all state
-    setIsStarted(false);
-    setIsFinished(false);
-    setTimeRemaining(config.timeLimit);
-    setGrade(null);
-    setFinalRepCount(0);
-    startTimeRef.current = null;
-    // Reset rep count and exercise state
-    resetRepCount();
-    // Disable counting until next start
-    setCountingEnabled(false);
   };
 
   const formatTime = (seconds: number) => {
@@ -155,67 +145,62 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Error screen
   if (error) {
     const isInIframe = window.self !== window.top;
-    const currentUrl = window.location.href;
     
     return (
       <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-white text-xl mb-4">Camera Access Required</p>
-          <p className="text-muted-foreground mb-6">
-            This exercise requires camera access for pose detection.
-          </p>
+          
           {isInIframe ? (
-            <div className="mb-6">
+            <>
               <p className="text-yellow-400 mb-4">
-                Camera doesn't work in the embedded preview. Open in a new tab to use camera:
+                Camera doesn't work in the embedded preview.
               </p>
               <a 
-                href={currentUrl} 
-                target="_blank" 
+                href={window.location.href}
+                target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded-md font-medium hover:bg-primary/90"
-                data-testid="link-open-new-tab"
+                className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-md font-medium mb-4"
               >
+                <ExternalLink className="w-4 h-4" />
                 Open in New Tab
               </a>
-            </div>
+            </>
           ) : (
-            <p className="text-muted-foreground mb-6">
-              Please allow camera access when prompted by your browser.
-            </p>
+            <p className="text-muted-foreground mb-4">{error}</p>
           )}
-          <div className="space-y-3">
-            <Button onClick={handleGoHome} variant="outline" className="w-full" data-testid="button-go-back">
-              Go Back
-            </Button>
-          </div>
+          
+          <Button variant="outline" onClick={handleGoHome} className="w-full">
+            Go Back
+          </Button>
         </div>
       </div>
     );
   }
 
-  // Finished screen with grade
-  if (isFinished && grade) {
+  // Finished screen
+  if (workoutState === "finished" && grade) {
     return (
       <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4">
         <div className="text-center">
           <div className={`text-9xl font-bold mb-8 ${getGradeColor(grade)}`}>
             {grade}
           </div>
-          <p className="text-white text-2xl mb-2">
-            {exerciseType.charAt(0).toUpperCase() + exerciseType.slice(1)} - {difficulty}
+          <p className="text-white text-2xl mb-2 capitalize">
+            {exerciseType} - {difficulty}
           </p>
           <p className="text-muted-foreground text-xl mb-8">
-            {finalRepCount} / {config.targetReps} reps completed
+            {finalReps} / {config.targetReps} reps completed
           </p>
           <div className="flex gap-4 justify-center">
-            <Button variant="outline" onClick={handleTryAgain} data-testid="button-try-again">
+            <Button variant="outline" onClick={handleTryAgain}>
               Try Again
             </Button>
-            <Button onClick={handleGoHome} data-testid="button-go-home">
+            <Button onClick={handleGoHome}>
               Back to Home
             </Button>
           </div>
@@ -226,14 +211,16 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
 
   return (
     <div className="min-h-screen bg-zinc-900 relative">
-      {/* Video Container */}
       <div className="relative w-full h-screen">
+        {/* Video feed */}
         <video
           ref={videoRef}
           className="absolute inset-0 w-full h-full object-cover transform -scale-x-100"
           playsInline
           muted
         />
+        
+        {/* Skeleton overlay */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover transform -scale-x-100 pointer-events-none"
@@ -241,51 +228,47 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
         
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-20">
             <div className="text-center max-w-sm">
-              <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-              <p className="text-white text-xl mb-2">Loading pose detection...</p>
-              <p className="text-muted-foreground text-sm">
-                This may take up to 30 seconds on first load while the AI model downloads.
-              </p>
+              <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto mb-6" />
+              <p className="text-white text-xl mb-2">Loading...</p>
+              <p className="text-muted-foreground">{loadingStatus}</p>
             </div>
           </div>
         )}
         
-        {/* Body detected indicator */}
-        <div className="absolute top-4 left-4 flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            isBodyDetected ? "bg-green-500" : "bg-red-500/50"
-          }`}>
-            {isBodyDetected && <Check className="w-6 h-6 text-white" />}
+        {/* Body detection indicator */}
+        {!isLoading && (
+          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              isBodyDetected ? "bg-green-500" : "bg-red-500/50"
+            }`}>
+              {isBodyDetected && <Check className="w-6 h-6 text-white" />}
+            </div>
+            <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
+              {isBodyDetected ? "Body Detected" : "Get in frame"}
+            </span>
           </div>
-          <span className="text-white text-sm font-medium">
-            {isBodyDetected ? "Body Detected" : "Position yourself in frame"}
-          </span>
-        </div>
+        )}
         
-        {/* Exercise info and timer */}
-        <div className="absolute top-4 right-4 text-right">
+        {/* Exercise info */}
+        <div className="absolute top-4 right-4 z-10">
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4">
-            <p className="text-primary font-bold text-lg uppercase">
-              {exerciseType}
-            </p>
+            <p className="text-primary font-bold text-lg uppercase">{exerciseType}</p>
             <p className="text-muted-foreground text-sm capitalize">{difficulty}</p>
           </div>
         </div>
         
-        {/* Timer and rep counter (when started) */}
-        {isStarted && (
+        {/* Active workout display */}
+        {workoutState === "active" && (
           <>
-            <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2">
-              <div className="text-center">
-                <div className="text-8xl font-bold text-white drop-shadow-lg">
-                  {formatTime(timeRemaining)}
-                </div>
+            <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 z-10">
+              <div className="text-8xl font-bold text-white drop-shadow-lg">
+                {formatTime(timeRemaining)}
               </div>
             </div>
             
-            <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2">
+            <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-10">
               <div className="bg-black/60 backdrop-blur-sm rounded-2xl px-12 py-6 text-center">
                 <p className="text-6xl font-bold text-white">{repCount}</p>
                 <p className="text-muted-foreground text-lg">/ {config.targetReps} reps</p>
@@ -294,9 +277,9 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
           </>
         )}
         
-        {/* Start button (before started) */}
-        {!isStarted && !isLoading && (
-          <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2">
+        {/* Start button */}
+        {workoutState === "ready" && !isLoading && (
+          <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-10">
             <div className="text-center">
               <p className="text-white text-lg mb-4">
                 Target: <span className="font-bold text-primary">{config.targetReps} reps</span> in{" "}
@@ -307,7 +290,6 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
                 className="px-12 py-6 text-xl"
                 onClick={handleStart}
                 disabled={!isBodyDetected}
-                data-testid="button-start-exercise"
               >
                 {isBodyDetected ? "Start Exercise" : "Get in Position"}
               </Button>
@@ -316,8 +298,8 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
         )}
         
         {/* Back button */}
-        <div className="absolute bottom-4 left-4">
-          <Button variant="ghost" onClick={handleGoHome} data-testid="button-back">
+        <div className="absolute bottom-4 left-4 z-10">
+          <Button variant="ghost" onClick={handleGoHome}>
             Back
           </Button>
         </div>
