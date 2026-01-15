@@ -156,22 +156,39 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
   };
 
   if (error) {
+    const isInIframe = window.self !== window.top;
+    const currentUrl = window.location.href;
+    
     return (
       <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-white text-xl mb-4">Camera Access Required</p>
           <p className="text-muted-foreground mb-6">
-            This exercise requires camera access for pose detection. 
-            {window.location.hostname.includes('replit') && (
-              <span className="block mt-2 text-yellow-400">
-                Note: Camera access doesn't work in the Replit preview. 
-                Please publish the app and open it in a new browser tab to use the camera features.
-              </span>
-            )}
+            This exercise requires camera access for pose detection.
           </p>
+          {isInIframe ? (
+            <div className="mb-6">
+              <p className="text-yellow-400 mb-4">
+                Camera doesn't work in the embedded preview. Open in a new tab to use camera:
+              </p>
+              <a 
+                href={currentUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded-md font-medium hover:bg-primary/90"
+                data-testid="link-open-new-tab"
+              >
+                Open in New Tab
+              </a>
+            </div>
+          ) : (
+            <p className="text-muted-foreground mb-6">
+              Please allow camera access when prompted by your browser.
+            </p>
+          )}
           <div className="space-y-3">
-            <Button onClick={handleGoHome} className="w-full" data-testid="button-go-back">
+            <Button onClick={handleGoHome} variant="outline" className="w-full" data-testid="button-go-back">
               Go Back
             </Button>
           </div>
