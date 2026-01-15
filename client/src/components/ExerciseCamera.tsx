@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { usePoseDetection, type ExerciseType } from "@/hooks/use-pose-detection";
 import { useCreateWorkoutSession } from "@/hooks/use-workout-sessions";
-import { difficultyConfigs, type DifficultyLevel, type Grade } from "@shared/schema";
+import { getDifficultyConfig, type DifficultyLevel, type IntensityLevel, type Grade } from "@shared/schema";
 import { Check, Loader2, AlertCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
@@ -9,6 +9,7 @@ import { useLocation } from "wouter";
 interface ExerciseCameraProps {
   exerciseType: ExerciseType;
   difficulty: DifficultyLevel;
+  intensity: IntensityLevel;
 }
 
 function calculateGrade(completedReps: number, targetReps: number): Grade {
@@ -34,9 +35,9 @@ function getGradeColor(grade: Grade): string {
   }
 }
 
-export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps) {
+export function ExerciseCamera({ exerciseType, difficulty, intensity }: ExerciseCameraProps) {
   const [, setLocation] = useLocation();
-  const config = difficultyConfigs[exerciseType][difficulty];
+  const config = getDifficultyConfig(exerciseType, difficulty, intensity);
   
   const {
     videoRef,
@@ -84,6 +85,7 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
       await createSession.mutateAsync({
         exerciseType,
         difficulty,
+        intensity,
         targetReps: config.targetReps,
         completedReps: reps,
         timeLimit: config.timeLimit,
@@ -93,7 +95,7 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
     } catch (err) {
       console.error("Failed to save:", err);
     }
-  }, [config, exerciseType, difficulty, createSession, disableCounting]);
+  }, [config, exerciseType, difficulty, intensity, createSession, disableCounting]);
 
   const handleStart = () => {
     if (!isBodyDetected) return;

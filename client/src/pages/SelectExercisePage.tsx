@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { difficultyConfigs, type ExerciseType, type DifficultyLevel } from "@shared/schema";
-import { ArrowLeft, Dumbbell, Activity, Clock, Target } from "lucide-react";
+import { getDifficultyConfig, type ExerciseType, type DifficultyLevel, type IntensityLevel } from "@shared/schema";
+import { ArrowLeft, Dumbbell, Activity, Clock, Target, Square } from "lucide-react";
 
 export default function SelectExercisePage() {
   const [, setLocation] = useLocation();
   const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | null>(null);
+  const [selectedIntensity, setSelectedIntensity] = useState<IntensityLevel>(2);
 
   const exercises: { type: ExerciseType; label: string; icon: typeof Dumbbell }[] = [
     { type: "pushups", label: "Push-ups", icon: Dumbbell },
@@ -21,14 +22,16 @@ export default function SelectExercisePage() {
     { level: "pro", label: "Pro", color: "bg-red-500" },
   ];
 
+  const intensityLevels: IntensityLevel[] = [1, 2, 3];
+
   const handleStart = () => {
     if (selectedExercise && selectedDifficulty) {
-      setLocation(`/exercise/${selectedExercise}/${selectedDifficulty}`);
+      setLocation(`/exercise/${selectedExercise}/${selectedDifficulty}/${selectedIntensity}`);
     }
   };
 
   const config = selectedExercise && selectedDifficulty 
-    ? difficultyConfigs[selectedExercise][selectedDifficulty]
+    ? getDifficultyConfig(selectedExercise, selectedDifficulty, selectedIntensity)
     : null;
 
   const formatTime = (seconds: number) => {
@@ -102,6 +105,48 @@ export default function SelectExercisePage() {
             ))}
           </div>
         </div>
+
+        {/* Intensity Selection - Only show after difficulty is selected */}
+        {selectedDifficulty && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold mb-2 text-muted-foreground">Select Intensity</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              More squares = higher reps, less time
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              {intensityLevels.map((level) => (
+                <Card
+                  key={level}
+                  className={`cursor-pointer transition-all hover-elevate ${
+                    selectedIntensity === level
+                      ? "border-primary bg-primary/10"
+                      : "border-border"
+                  }`}
+                  onClick={() => setSelectedIntensity(level)}
+                  data-testid={`card-intensity-${level}`}
+                >
+                  <CardContent className="flex flex-col items-center justify-center p-4">
+                    <div className="flex gap-1 mb-2">
+                      {Array.from({ length: level }).map((_, i) => (
+                        <Square
+                          key={i}
+                          className={`w-5 h-5 ${
+                            selectedIntensity === level
+                              ? "text-primary fill-primary"
+                              : "text-muted-foreground fill-muted-foreground"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {level === 1 ? "Easy" : level === 2 ? "Normal" : "Hard"}
+                    </span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Config Preview */}
         {config && (

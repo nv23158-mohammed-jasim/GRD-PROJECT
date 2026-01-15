@@ -13,7 +13,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/select-exercise" component={SelectExercisePage} />
-      <Route path="/exercise/:type/:difficulty" component={ExercisePage} />
+      <Route path="/exercise/:type/:difficulty/:intensity" component={ExercisePage} />
       <Route component={NotFound} />
     </Switch>
   );

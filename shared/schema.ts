@@ -18,6 +18,7 @@ export const workoutSessions = pgTable("workout_sessions", {
   id: serial("id").primaryKey(),
   exerciseType: varchar("exercise_type", { length: 50 }).notNull(), // "pushups" | "squats"
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "beginner" | "medium" | "pro"
+  intensity: integer("intensity").default(2).notNull(), // 1, 2, or 3
   targetReps: integer("target_reps").notNull(),
   completedReps: integer("completed_reps").notNull(),
   timeLimit: integer("time_limit").notNull(), // in seconds
@@ -59,24 +60,75 @@ export type WorkoutSessionsListResponse = WorkoutSession[];
 // Exercise and difficulty types
 export type ExerciseType = "pushups" | "squats";
 export type DifficultyLevel = "beginner" | "medium" | "pro";
+export type IntensityLevel = 1 | 2 | 3;
 export type Grade = "AA+" | "A+" | "A" | "B" | "C" | "D" | "F";
 
-// Difficulty configuration
+// Base difficulty configuration (for intensity level 2)
+export interface BaseDifficultyConfig {
+  level: DifficultyLevel;
+  baseTimeLimit: number; // seconds at intensity 2
+  baseTargetReps: number; // reps at intensity 2
+}
+
+// Computed difficulty config with intensity applied
 export interface DifficultyConfig {
   level: DifficultyLevel;
-  timeLimit: number; // seconds
+  intensity: IntensityLevel;
+  timeLimit: number;
   targetReps: number;
 }
 
-export const difficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, DifficultyConfig>> = {
+// Base configs at intensity level 2 (balanced)
+const baseDifficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, BaseDifficultyConfig>> = {
   pushups: {
-    beginner: { level: "beginner", timeLimit: 120, targetReps: 10 },
-    medium: { level: "medium", timeLimit: 90, targetReps: 20 },
-    pro: { level: "pro", timeLimit: 60, targetReps: 30 },
+    beginner: { level: "beginner", baseTimeLimit: 90, baseTargetReps: 10 },
+    medium: { level: "medium", baseTimeLimit: 75, baseTargetReps: 20 },
+    pro: { level: "pro", baseTimeLimit: 60, baseTargetReps: 30 },
   },
   squats: {
-    beginner: { level: "beginner", timeLimit: 120, targetReps: 15 },
-    medium: { level: "medium", timeLimit: 90, targetReps: 30 },
-    pro: { level: "pro", timeLimit: 60, targetReps: 50 },
+    beginner: { level: "beginner", baseTimeLimit: 90, baseTargetReps: 15 },
+    medium: { level: "medium", baseTimeLimit: 75, baseTargetReps: 30 },
+    pro: { level: "pro", baseTimeLimit: 60, baseTargetReps: 50 },
+  },
+};
+
+// Intensity multipliers:
+// Level 1: More time (+25%), fewer reps (-25%) - easier
+// Level 2: Balanced (base values)
+// Level 3: Less time (-25%), more reps (+25%) - harder
+const intensityModifiers: Record<IntensityLevel, { timeMod: number; repsMod: number }> = {
+  1: { timeMod: 1.25, repsMod: 0.75 },
+  2: { timeMod: 1.0, repsMod: 1.0 },
+  3: { timeMod: 0.75, repsMod: 1.25 },
+};
+
+// Get config for specific exercise, difficulty, and intensity
+export function getDifficultyConfig(
+  exercise: ExerciseType,
+  difficulty: DifficultyLevel,
+  intensity: IntensityLevel = 2
+): DifficultyConfig {
+  const base = baseDifficultyConfigs[exercise][difficulty];
+  const mod = intensityModifiers[intensity];
+  
+  return {
+    level: difficulty,
+    intensity,
+    timeLimit: Math.round(base.baseTimeLimit * mod.timeMod),
+    targetReps: Math.round(base.baseTargetReps * mod.repsMod),
+  };
+}
+
+// Legacy export for backwards compatibility
+export const difficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, DifficultyConfig>> = {
+  pushups: {
+    beginner: getDifficultyConfig("pushups", "beginner", 2),
+    medium: getDifficultyConfig("pushups", "medium", 2),
+    pro: getDifficultyConfig("pushups", "pro", 2),
+  },
+  squats: {
+    beginner: getDifficultyConfig("squats", "beginner", 2),
+    medium: getDifficultyConfig("squats", "medium", 2),
+    pro: getDifficultyConfig("squats", "pro", 2),
   },
 };
