@@ -196,8 +196,11 @@ export default function GamePage() {
       }
     }
 
-    // Generate obstacles
-    if (now - lastObstacleRef.current > 2000 + Math.random() * 1500) {
+    // Only generate obstacles and move game forward when running
+    const currentSpeed = isRunning ? state.gameSpeed : 0;
+    
+    // Generate obstacles only when running
+    if (isRunning && now - lastObstacleRef.current > 2000 + Math.random() * 1500) {
       const newObstacle = generateObstacle();
       setGameState(prev => ({
         ...prev,
@@ -206,7 +209,7 @@ export default function GamePage() {
       lastObstacleRef.current = now;
     }
 
-    // Move obstacles and check collisions
+    // Move obstacles and check collisions (only move when running)
     const characterX = 100;
     const charWidth = CHARACTER_WIDTH;
     const charHeight = newIsDucking ? CHARACTER_DUCKING_HEIGHT : CHARACTER_HEIGHT;
@@ -216,7 +219,7 @@ export default function GamePage() {
     let scoreBonus = 0;
 
     const updatedObstacles = state.obstacles
-      .map(obs => ({ ...obs, x: obs.x - state.gameSpeed }))
+      .map(obs => ({ ...obs, x: obs.x - currentSpeed }))
       .filter(obs => {
         if (obs.x + obs.width < 0) return false;
 
@@ -269,10 +272,10 @@ export default function GamePage() {
       speak("Game over!");
     }
 
-    // Increase speed over time
-    const newDistance = state.distance + state.gameSpeed;
+    // Increase speed and distance only when running
+    const newDistance = isRunning ? state.distance + currentSpeed : state.distance;
     const newSpeed = Math.min(12, 5 + Math.floor(newDistance / 1000) * 0.5);
-    const newScore = state.score + 1 + scoreBonus;
+    const newScore = isRunning ? state.score + 1 + scoreBonus : state.score + scoreBonus;
 
     setGameState(prev => ({
       ...prev,
@@ -289,7 +292,7 @@ export default function GamePage() {
     }));
 
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [poseJumping, poseDucking, posePushup, generateObstacle, speak]);
+  }, [poseJumping, poseDucking, posePushup, isRunning, generateObstacle, speak]);
 
   // Start game loop
   useEffect(() => {
@@ -564,11 +567,11 @@ export default function GamePage() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${isRunning ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Run (move side to side)</span>
+                  <span>Run (jog in place facing camera)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${poseJumping ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Jump (raise arms up)</span>
+                  <span>Jump (raise arms above head)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${poseDucking ? "bg-green-500" : "bg-muted"}`} />
@@ -576,7 +579,7 @@ export default function GamePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${posePushup ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Pushup (gain health)</span>
+                  <span>Pushup (get low + bend arms)</span>
                 </div>
               </div>
             </Card>
@@ -587,11 +590,11 @@ export default function GamePage() {
                 How to Play
               </h3>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>Jump over enemies to defeat them</li>
-                <li>Duck under tunnels to pass through</li>
+                <li>Jog in place to make the character run</li>
+                <li>Raise arms to jump over enemies</li>
+                <li>Squat down to duck under tunnels</li>
                 <li>Collect green hearts for health</li>
                 <li>Do pushups to restore health</li>
-                <li>Survive as long as possible!</li>
               </ul>
             </Card>
           </div>

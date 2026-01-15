@@ -57,6 +57,11 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
   const wristYBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
   const elbowAngleBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
   
+  // Running detection - track vertical oscillation
+  const recentShoulderYRef = useRef<number[]>([]);
+  const lastRunningUpdateRef = useRef<number>(0);
+  const runningScoreRef = useRef<number>(0);
+  
   // Calibration
   const standingShoulderYRef = useRef<number | null>(null);
   const standingHipYRef = useRef<number | null>(null);
@@ -129,8 +134,38 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
     const standingHipY = standingHipYRef.current || smoothedHipY;
     const frameHeight = videoRef.current?.videoHeight || 480;
     
-    // RUNNING: Always true when body is detected
-    setIsRunning(true);
+    // RUNNING: Detect vertical oscillation (body bouncing up and down when running in place)
+    const now = Date.now();
+    recentShoulderYRef.current.push(smoothedShoulderY);
+    if (recentShoulderYRef.current.length > 20) {
+      recentShoulderYRef.current.shift();
+    }
+    
+    // Analyze oscillation - look for direction changes (peaks and valleys)
+    let directionChanges = 0;
+    if (recentShoulderYRef.current.length >= 10) {
+      let lastDirection = 0; // 0 = none, 1 = up, -1 = down
+      for (let i = 1; i < recentShoulderYRef.current.length; i++) {
+        const diff = recentShoulderYRef.current[i] - recentShoulderYRef.current[i - 1];
+        const currentDirection = diff > 1 ? 1 : diff < -1 ? -1 : 0;
+        if (currentDirection !== 0 && currentDirection !== lastDirection && lastDirection !== 0) {
+          directionChanges++;
+        }
+        if (currentDirection !== 0) lastDirection = currentDirection;
+      }
+    }
+    
+    // Running detected if we see multiple direction changes (oscillation)
+    const isRunningDetected = directionChanges >= 3;
+    
+    // Smooth the running state with a score system
+    if (isRunningDetected) {
+      runningScoreRef.current = Math.min(10, runningScoreRef.current + 2);
+    } else {
+      runningScoreRef.current = Math.max(0, runningScoreRef.current - 1);
+    }
+    
+    setIsRunning(runningScoreRef.current >= 4);
     
     // JUMPING: Wrists above shoulders (arms raised up)
     if (smoothedWristY !== null) {

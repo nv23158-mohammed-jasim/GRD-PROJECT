@@ -7,10 +7,10 @@ A full-stack fitness tracking application that allows users to log daily fitness
 ### Game Mode
 
 The app includes a "Fitness Runner" game mode - a Mario-style side-scrolling game controlled by body movements:
+- **Running**: Jog in place facing the camera to make the character run (detects vertical body oscillation)
 - **Jump**: Raise arms above shoulders to jump over enemies
 - **Duck**: Squat down to pass under tunnels  
-- **Pushup**: Do a pushup to restore health
-- **Running**: Character runs automatically when body is detected
+- **Pushup**: Do a pushup position to restore health
 
 The game features obstacles (enemies, tunnels), health pickups, scoring system, and increasing difficulty over time.
 
