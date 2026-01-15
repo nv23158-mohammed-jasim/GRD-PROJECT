@@ -224,27 +224,50 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     setError(null);
     
     try {
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 640, height: 480 },
-        audio: false,
-      });
+      console.log("Requesting camera access...");
       
+      // Request camera access with fallback options
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: 640, height: 480 },
+          audio: false,
+        });
+      } catch (cameraErr) {
+        // Try with simpler constraints as fallback
+        console.log("Trying fallback camera settings...");
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+      
+      console.log("Camera access granted");
       streamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        console.log("Video playing");
       }
       
-      // Initialize pose detector
+      console.log("Loading pose detection model (this may take a moment)...");
+      
+      // Initialize pose detector with timeout
       const model = poseDetection.SupportedModels.MoveNet;
       const detectorConfig: poseDetection.MoveNetModelConfig = {
         modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
       };
       
-      detectorRef.current = await poseDetection.createDetector(model, detectorConfig);
+      // Add a timeout for model loading
+      const modelLoadPromise = poseDetection.createDetector(model, detectorConfig);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Model loading timed out after 30 seconds")), 30000)
+      );
       
+      detectorRef.current = await Promise.race([modelLoadPromise, timeoutPromise]) as poseDetection.PoseDetector;
+      
+      console.log("Pose detection model loaded successfully");
       setIsLoading(false);
       
       // Start detection loop

@@ -242,9 +242,12 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
         {/* Loading overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
-            <div className="text-center">
+            <div className="text-center max-w-sm">
               <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-              <p className="text-white text-xl">Loading pose detection...</p>
+              <p className="text-white text-xl mb-2">Loading pose detection...</p>
+              <p className="text-muted-foreground text-sm">
+                This may take up to 30 seconds on first load while the AI model downloads.
+              </p>
             </div>
           </div>
         )}
