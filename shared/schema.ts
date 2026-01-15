@@ -1,18 +1,35 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+
+import { pgTable, text, serial, integer, decimal, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+// === TABLE DEFINITIONS ===
+export const entries = pgTable("entries", {
+  id: serial("id").primaryKey(),
+  steps: integer("steps").notNull(),
+  calories: integer("calories").notNull(),
+  // Using text for decimal to avoid precision issues in JS, or assume double precision
+  weight: decimal("weight", { precision: 5, scale: 2 }).notNull(),
+  date: timestamp("date").defaultNow().notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+// === BASE SCHEMAS ===
+// Allow weight to be a number string or number in Zod, but Drizzle returns string for decimal
+export const insertEntrySchema = createInsertSchema(entries).omit({ 
+  id: true, 
+  date: true 
+}).extend({
+  weight: z.preprocess((val) => String(val), z.string()), 
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// === EXPLICIT API CONTRACT TYPES ===
+export type Entry = typeof entries.$inferSelect;
+export type InsertEntry = z.infer<typeof insertEntrySchema>;
+
+// Request types
+export type CreateEntryRequest = InsertEntry;
+export type UpdateEntryRequest = Partial<InsertEntry>;
+
+// Response types
+export type EntryResponse = Entry;
+export type EntriesListResponse = Entry[];
