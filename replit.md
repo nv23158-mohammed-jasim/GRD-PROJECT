@@ -4,6 +4,16 @@
 
 A full-stack fitness tracking application that allows users to log daily fitness metrics (steps, calories, weight) and perform AI-powered workout sessions with real-time pose detection. The app uses TensorFlow.js for pose detection during exercises like push-ups and squats, providing rep counting and performance grading.
 
+### Game Mode
+
+The app includes a "Fitness Runner" game mode - a Mario-style side-scrolling game controlled by body movements:
+- **Jump**: Raise arms above shoulders to jump over enemies
+- **Duck**: Squat down to pass under tunnels  
+- **Pushup**: Do a pushup to restore health
+- **Running**: Character runs automatically when body is detected
+
+The game features obstacles (enemies, tunnels), health pickups, scoring system, and increasing difficulty over time.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
