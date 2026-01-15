@@ -57,9 +57,8 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
   const wristYBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
   const elbowAngleBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
   
-  // Running detection - track vertical oscillation
-  const recentShoulderYRef = useRef<number[]>([]);
-  const lastRunningUpdateRef = useRef<number>(0);
+  // Running detection - track hand movement
+  const recentWristPositionsRef = useRef<{ x: number; y: number }[]>([]);
   const runningScoreRef = useRef<number>(0);
   
   // Calibration
@@ -134,38 +133,42 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
     const standingHipY = standingHipYRef.current || smoothedHipY;
     const frameHeight = videoRef.current?.videoHeight || 480;
     
-    // RUNNING: Detect vertical oscillation (body bouncing up and down when running in place)
-    const now = Date.now();
-    recentShoulderYRef.current.push(smoothedShoulderY);
-    if (recentShoulderYRef.current.length > 20) {
-      recentShoulderYRef.current.shift();
-    }
+    // RUNNING: Detect continuous hand movement
+    const lWrist = getKeypoint(keypoints, "left_wrist", minConfidence);
+    const rWrist = getKeypoint(keypoints, "right_wrist", minConfidence);
     
-    // Analyze oscillation - look for direction changes (peaks and valleys)
-    let directionChanges = 0;
-    if (recentShoulderYRef.current.length >= 10) {
-      let lastDirection = 0; // 0 = none, 1 = up, -1 = down
-      for (let i = 1; i < recentShoulderYRef.current.length; i++) {
-        const diff = recentShoulderYRef.current[i] - recentShoulderYRef.current[i - 1];
-        const currentDirection = diff > 1 ? 1 : diff < -1 ? -1 : 0;
-        if (currentDirection !== 0 && currentDirection !== lastDirection && lastDirection !== 0) {
-          directionChanges++;
-        }
-        if (currentDirection !== 0) lastDirection = currentDirection;
+    // Track wrist position (use either wrist that's visible)
+    const currentWrist = lWrist || rWrist;
+    if (currentWrist) {
+      recentWristPositionsRef.current.push({ x: currentWrist.x, y: currentWrist.y });
+      if (recentWristPositionsRef.current.length > 15) {
+        recentWristPositionsRef.current.shift();
       }
     }
     
-    // Running detected if we see multiple direction changes (oscillation)
-    const isRunningDetected = directionChanges >= 3;
+    // Calculate total hand movement over recent frames
+    let totalMovement = 0;
+    if (recentWristPositionsRef.current.length >= 5) {
+      for (let i = 1; i < recentWristPositionsRef.current.length; i++) {
+        const prev = recentWristPositionsRef.current[i - 1];
+        const curr = recentWristPositionsRef.current[i];
+        const dx = curr.x - prev.x;
+        const dy = curr.y - prev.y;
+        totalMovement += Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+    
+    // Running detected if hands are moving enough (threshold ~100 pixels total movement)
+    const isRunningDetected = totalMovement > 80;
     
     // Smooth the running state with a score system
     if (isRunningDetected) {
-      runningScoreRef.current = Math.min(10, runningScoreRef.current + 2);
+      runningScoreRef.current = Math.min(10, runningScoreRef.current + 3);
     } else {
       runningScoreRef.current = Math.max(0, runningScoreRef.current - 1);
     }
     
-    setIsRunning(runningScoreRef.current >= 4);
+    setIsRunning(runningScoreRef.current >= 3);
     
     // JUMPING: Wrists above shoulders (arms raised up)
     if (smoothedWristY !== null) {
@@ -181,19 +184,19 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
     // PUSHUP: Detect elbow angle (similar to exercise pushup detection)
     let pushupDetected = false;
     
-    const lShoulder = getKeypoint(keypoints, "left_shoulder", minConfidence);
-    const lElbow = getKeypoint(keypoints, "left_elbow", minConfidence);
-    const lWrist = getKeypoint(keypoints, "left_wrist", minConfidence);
-    const rShoulder = getKeypoint(keypoints, "right_shoulder", minConfidence);
-    const rElbow = getKeypoint(keypoints, "right_elbow", minConfidence);
-    const rWrist = getKeypoint(keypoints, "right_wrist", minConfidence);
+    const leftShoulder = getKeypoint(keypoints, "left_shoulder", minConfidence);
+    const leftElbow = getKeypoint(keypoints, "left_elbow", minConfidence);
+    const leftWrist = getKeypoint(keypoints, "left_wrist", minConfidence);
+    const rightShoulder = getKeypoint(keypoints, "right_shoulder", minConfidence);
+    const rightElbow = getKeypoint(keypoints, "right_elbow", minConfidence);
+    const rightWrist = getKeypoint(keypoints, "right_wrist", minConfidence);
     
     const angles: number[] = [];
-    if (lShoulder && lElbow && lWrist) {
-      angles.push(calculateAngle(lShoulder, lElbow, lWrist));
+    if (leftShoulder && leftElbow && leftWrist) {
+      angles.push(calculateAngle(leftShoulder, leftElbow, leftWrist));
     }
-    if (rShoulder && rElbow && rWrist) {
-      angles.push(calculateAngle(rShoulder, rElbow, rWrist));
+    if (rightShoulder && rightElbow && rightWrist) {
+      angles.push(calculateAngle(rightShoulder, rightElbow, rightWrist));
     }
     
     if (angles.length > 0) {

@@ -27,6 +27,8 @@ interface GameState {
   distance: number;
   isGameOver: boolean;
   isPaused: boolean;
+  stage: number;
+  stageProgress: number;
 }
 
 const CANVAS_WIDTH = 800;
@@ -48,8 +50,8 @@ export default function GamePage() {
   
   const [gameState, setGameState] = useState<GameState>({
     score: 0,
-    health: 3,
-    maxHealth: 5,
+    health: 100,
+    maxHealth: 100,
     characterY: CANVAS_HEIGHT - GROUND_HEIGHT - CHARACTER_HEIGHT,
     characterVelocityY: 0,
     isJumping: false,
@@ -60,6 +62,8 @@ export default function GamePage() {
     distance: 0,
     isGameOver: false,
     isPaused: true,
+    stage: 1,
+    stageProgress: 0,
   });
 
   const gameStateRef = useRef(gameState);
@@ -106,10 +110,15 @@ export default function GamePage() {
     };
   }, [startCamera, stopCamera]);
 
-  // Generate random obstacle
-  const generateObstacle = useCallback((): GameObject => {
+  // Generate random obstacle based on current stage
+  const generateObstacle = useCallback((stage: number): GameObject => {
     const types: GameObject["type"][] = ["tunnel", "enemy", "health"];
-    const weights = [0.35, 0.45, 0.2];
+    // Higher stages = more enemies, less health
+    const enemyWeight = Math.min(0.6, 0.4 + stage * 0.05);
+    const healthWeight = Math.max(0.1, 0.25 - stage * 0.03);
+    const tunnelWeight = 1 - enemyWeight - healthWeight;
+    const weights = [tunnelWeight, enemyWeight, healthWeight];
+    
     const rand = Math.random();
     let type: GameObject["type"] = "enemy";
     let cumulative = 0;
@@ -127,7 +136,7 @@ export default function GamePage() {
       return {
         x: CANVAS_WIDTH,
         y: groundY - 60,
-        width: 80,
+        width: 80 + stage * 10,
         height: 60,
         type: "tunnel",
       };
@@ -190,18 +199,19 @@ export default function GamePage() {
     // Handle pushup for health (with cooldown)
     if (posePushup && now - pushupCooldownRef.current > 2000) {
       if (state.health < state.maxHealth) {
-        newHealth = Math.min(state.maxHealth, state.health + 1);
+        newHealth = Math.min(state.maxHealth, state.health + 20);
         pushupCooldownRef.current = now;
-        speak("Health up!");
+        speak("Health restored!");
       }
     }
 
     // Only generate obstacles and move game forward when running
     const currentSpeed = isRunning ? state.gameSpeed : 0;
     
-    // Generate obstacles only when running
-    if (isRunning && now - lastObstacleRef.current > 2000 + Math.random() * 1500) {
-      const newObstacle = generateObstacle();
+    // Generate obstacles - interval decreases with stage (more frequent obstacles)
+    const obstacleInterval = Math.max(800, 2000 - state.stage * 150);
+    if (isRunning && now - lastObstacleRef.current > obstacleInterval + Math.random() * 500) {
+      const newObstacle = generateObstacle(state.stage);
       setGameState(prev => ({
         ...prev,
         obstacles: [...prev.obstacles, newObstacle],
@@ -238,25 +248,23 @@ export default function GamePage() {
         if (collision) {
           if (obs.type === "tunnel") {
             if (!newIsDucking) {
-              hitDamage++;
-              speak("Duck under tunnels!");
+              hitDamage += 15 + state.stage * 2;
+              speak("Duck!");
               return false;
             }
           } else if (obs.type === "enemy") {
             if (!newIsJumping && newCharacterY >= groundY - 10) {
-              hitDamage++;
-              speak("Jump over enemies!");
+              hitDamage += 20 + state.stage * 3;
+              speak("Jump!");
               return false;
             } else if (newIsJumping && newVelocityY > 0) {
-              scoreBonus += 100;
-              speak("Enemy defeated!");
+              scoreBonus += 100 + state.stage * 20;
+              speak("Nice!");
               return false;
             }
           } else if (obs.type === "health") {
-            if (newHealth < state.maxHealth) {
-              newHealth++;
-              speak("Health!");
-            }
+            newHealth = Math.min(state.maxHealth, newHealth + 25);
+            speak("Health!");
             scoreBonus += 50;
             return false;
           }
@@ -274,8 +282,22 @@ export default function GamePage() {
 
     // Increase speed and distance only when running
     const newDistance = isRunning ? state.distance + currentSpeed : state.distance;
-    const newSpeed = Math.min(12, 5 + Math.floor(newDistance / 1000) * 0.5);
+    const newSpeed = Math.min(12, 5 + state.stage * 0.5);
     const newScore = isRunning ? state.score + 1 + scoreBonus : state.score + scoreBonus;
+    
+    // Stage progression - every 1000 distance = next stage
+    const stageThreshold = 1000;
+    let newStage = state.stage;
+    let newStageProgress = state.stageProgress;
+    
+    if (isRunning) {
+      newStageProgress = state.stageProgress + currentSpeed;
+      if (newStageProgress >= stageThreshold) {
+        newStage = state.stage + 1;
+        newStageProgress = 0;
+        speak(`Stage ${newStage}!`);
+      }
+    }
 
     setGameState(prev => ({
       ...prev,
@@ -288,6 +310,8 @@ export default function GamePage() {
       distance: newDistance,
       gameSpeed: newSpeed,
       score: newScore,
+      stage: newStage,
+      stageProgress: newStageProgress,
       isGameOver,
     }));
 
@@ -394,21 +418,46 @@ export default function GamePage() {
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 20px Arial";
     ctx.fillText(`Score: ${gameState.score}`, 20, 30);
-    ctx.fillText(`Distance: ${Math.floor(gameState.distance)}m`, 20, 55);
+    ctx.fillText(`Stage: ${gameState.stage}`, 20, 55);
 
-    // Health hearts
-    for (let i = 0; i < gameState.maxHealth; i++) {
-      ctx.fillStyle = i < gameState.health ? "#ff4444" : "#444444";
-      ctx.beginPath();
-      const hx = CANVAS_WIDTH - 40 - i * 35;
-      const hy = 25;
-      ctx.moveTo(hx, hy + 5);
-      ctx.bezierCurveTo(hx, hy, hx - 10, hy, hx - 10, hy + 10);
-      ctx.bezierCurveTo(hx - 10, hy + 18, hx, hy + 25, hx, hy + 30);
-      ctx.bezierCurveTo(hx, hy + 25, hx + 10, hy + 18, hx + 10, hy + 10);
-      ctx.bezierCurveTo(hx + 10, hy, hx, hy, hx, hy + 5);
-      ctx.fill();
-    }
+    // Health bar
+    const healthBarWidth = 200;
+    const healthBarHeight = 20;
+    const healthBarX = CANVAS_WIDTH - healthBarWidth - 20;
+    const healthBarY = 15;
+    
+    // Health bar background
+    ctx.fillStyle = "#333333";
+    ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+    
+    // Health bar fill
+    const healthPercent = gameState.health / gameState.maxHealth;
+    const healthColor = healthPercent > 0.5 ? "#44ff44" : healthPercent > 0.25 ? "#ffff44" : "#ff4444";
+    ctx.fillStyle = healthColor;
+    ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+    
+    // Health bar border
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+    
+    // Health text
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`${Math.ceil(gameState.health)}/${gameState.maxHealth}`, healthBarX + healthBarWidth / 2, healthBarY + 15);
+    ctx.textAlign = "left";
+    
+    // Stage progress bar (under health bar)
+    const stageBarWidth = 200;
+    const stageBarHeight = 8;
+    const stageBarX = CANVAS_WIDTH - stageBarWidth - 20;
+    const stageBarY = healthBarY + healthBarHeight + 5;
+    
+    ctx.fillStyle = "#222222";
+    ctx.fillRect(stageBarX, stageBarY, stageBarWidth, stageBarHeight);
+    ctx.fillStyle = "#6666ff";
+    ctx.fillRect(stageBarX, stageBarY, stageBarWidth * (gameState.stageProgress / 1000), stageBarHeight);
 
     // Paused overlay
     if (gameState.isPaused && !gameState.isGameOver) {
@@ -430,23 +479,26 @@ export default function GamePage() {
       ctx.fillStyle = "#ff4444";
       ctx.font = "bold 50px Arial";
       ctx.textAlign = "center";
-      ctx.fillText("GAME OVER", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30);
+      ctx.fillText("GAME OVER", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 50);
       ctx.fillStyle = "#ffffff";
       ctx.font = "30px Arial";
-      ctx.fillText(`Final Score: ${gameState.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+      ctx.fillText(`Score: ${gameState.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.font = "24px Arial";
+      ctx.fillText(`Stage Reached: ${gameState.stage}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 35);
       ctx.textAlign = "left";
     }
   }, [gameState, isRunning]);
 
   const handleStart = () => {
     if (!isBodyDetected) return;
-    speak("Go!");
+    speak("Stage 1! Go!");
     setGameState(prev => ({
       ...prev,
       isPaused: false,
       isGameOver: false,
       score: 0,
-      health: 3,
+      health: 100,
+      maxHealth: 100,
       distance: 0,
       gameSpeed: 5,
       obstacles: [],
@@ -454,6 +506,8 @@ export default function GamePage() {
       characterVelocityY: 0,
       isJumping: false,
       isDucking: false,
+      stage: 1,
+      stageProgress: 0,
     }));
     lastObstacleRef.current = Date.now();
   };
