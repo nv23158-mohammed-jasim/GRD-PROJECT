@@ -205,12 +205,13 @@ export default function GamePage() {
       }
     }
 
-    // Only generate obstacles and move game forward when running
-    const currentSpeed = isRunning ? state.gameSpeed : 0;
+    // Game always moves but faster when running
+    const baseSpeed = 2; // Minimum movement speed
+    const currentSpeed = isRunning ? state.gameSpeed : baseSpeed;
     
     // Generate obstacles - interval decreases with stage (more frequent obstacles)
     const obstacleInterval = Math.max(800, 2000 - state.stage * 150);
-    if (isRunning && now - lastObstacleRef.current > obstacleInterval + Math.random() * 500) {
+    if (now - lastObstacleRef.current > obstacleInterval + Math.random() * 500) {
       const newObstacle = generateObstacle(state.stage);
       setGameState(prev => ({
         ...prev,
@@ -280,10 +281,10 @@ export default function GamePage() {
       speak("Game over!");
     }
 
-    // Increase speed and distance only when running
-    const newDistance = isRunning ? state.distance + currentSpeed : state.distance;
+    // Increase distance and score - running gives more
+    const newDistance = state.distance + currentSpeed;
     const newSpeed = Math.min(12, 5 + state.stage * 0.5);
-    const newScore = isRunning ? state.score + 1 + scoreBonus : state.score + scoreBonus;
+    const newScore = state.score + (isRunning ? 2 : 1) + scoreBonus;
     
     // Stage progression - every 1000 distance = next stage
     const stageThreshold = 1000;
@@ -334,18 +335,52 @@ export default function GamePage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear
-    ctx.fillStyle = "#1a1a2e";
+    // Clear - gradient sky
+    const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT - GROUND_HEIGHT);
+    gradient.addColorStop(0, "#0a0a1a");
+    gradient.addColorStop(1, "#1a1a3e");
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Stars (fixed positions based on canvas size)
+    ctx.fillStyle = "#ffffff";
+    const starPositions = [
+      [50, 30], [150, 60], [250, 25], [350, 70], [450, 40], 
+      [550, 55], [650, 35], [750, 65], [100, 90], [300, 100],
+      [500, 85], [700, 95], [200, 45], [400, 80], [600, 50]
+    ];
+    starPositions.forEach(([x, y]) => {
+      const twinkle = 0.5 + Math.sin(Date.now() / 500 + x) * 0.5;
+      ctx.globalAlpha = twinkle;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Mountains in background
+    ctx.fillStyle = "#2a2a4a";
+    ctx.beginPath();
+    ctx.moveTo(0, CANVAS_HEIGHT - GROUND_HEIGHT);
+    ctx.lineTo(100, CANVAS_HEIGHT - GROUND_HEIGHT - 60);
+    ctx.lineTo(200, CANVAS_HEIGHT - GROUND_HEIGHT);
+    ctx.lineTo(300, CANVAS_HEIGHT - GROUND_HEIGHT - 80);
+    ctx.lineTo(450, CANVAS_HEIGHT - GROUND_HEIGHT);
+    ctx.lineTo(550, CANVAS_HEIGHT - GROUND_HEIGHT - 50);
+    ctx.lineTo(700, CANVAS_HEIGHT - GROUND_HEIGHT);
+    ctx.lineTo(800, CANVAS_HEIGHT - GROUND_HEIGHT - 70);
+    ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT - GROUND_HEIGHT);
+    ctx.fill();
 
     // Draw ground
     ctx.fillStyle = "#4a4a6a";
     ctx.fillRect(0, CANVAS_HEIGHT - GROUND_HEIGHT, CANVAS_WIDTH, GROUND_HEIGHT);
     
-    // Ground texture
+    // Ground texture - scrolling lines
     ctx.strokeStyle = "#5a5a7a";
     ctx.lineWidth = 2;
-    for (let i = 0; i < CANVAS_WIDTH; i += 30) {
+    const scrollOffset = (gameState.distance * 2) % 30;
+    for (let i = -30 + scrollOffset; i < CANVAS_WIDTH + 30; i += 30) {
       ctx.beginPath();
       ctx.moveTo(i, CANVAS_HEIGHT - GROUND_HEIGHT);
       ctx.lineTo(i + 15, CANVAS_HEIGHT);
@@ -621,11 +656,11 @@ export default function GamePage() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${isRunning ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Run (jog in place facing camera)</span>
+                  <span>Run Faster (move your body/hands)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${poseJumping ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Jump (raise arms above head)</span>
+                  <span>Jump (raise arms up high)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${poseDucking ? "bg-green-500" : "bg-muted"}`} />
@@ -633,7 +668,7 @@ export default function GamePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${posePushup ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Pushup (get low + bend arms)</span>
+                  <span>Heal (pushup position)</span>
                 </div>
               </div>
             </Card>
@@ -644,11 +679,11 @@ export default function GamePage() {
                 How to Play
               </h3>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>Jog in place to make the character run</li>
-                <li>Raise arms to jump over enemies</li>
-                <li>Squat down to duck under tunnels</li>
-                <li>Collect green hearts for health</li>
-                <li>Do pushups to restore health</li>
+                <li>Game auto-scrolls - move to speed up!</li>
+                <li>Raise arms to jump over red enemies</li>
+                <li>Squat to duck under brown tunnels</li>
+                <li>Collect green pickups for health</li>
+                <li>Pushup position restores health too</li>
               </ul>
             </Card>
           </div>

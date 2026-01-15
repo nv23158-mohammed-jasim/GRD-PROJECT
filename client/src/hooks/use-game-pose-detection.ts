@@ -133,42 +133,45 @@ export function useGamePoseDetection(): UseGamePoseDetectionResult {
     const standingHipY = standingHipYRef.current || smoothedHipY;
     const frameHeight = videoRef.current?.videoHeight || 480;
     
-    // RUNNING: Detect continuous hand movement
+    // RUNNING: Detect any body movement (very lenient)
+    // Track shoulder movement for oscillation detection (jogging in place)
+    const shoulderOscillation = Math.abs(smoothedShoulderY - standingShoulderY);
+    
+    // Also check wrist movement as secondary signal
     const lWrist = getKeypoint(keypoints, "left_wrist", minConfidence);
     const rWrist = getKeypoint(keypoints, "right_wrist", minConfidence);
     
-    // Track wrist position (use either wrist that's visible)
     const currentWrist = lWrist || rWrist;
     if (currentWrist) {
       recentWristPositionsRef.current.push({ x: currentWrist.x, y: currentWrist.y });
-      if (recentWristPositionsRef.current.length > 15) {
+      if (recentWristPositionsRef.current.length > 10) {
         recentWristPositionsRef.current.shift();
       }
     }
     
-    // Calculate total hand movement over recent frames
-    let totalMovement = 0;
-    if (recentWristPositionsRef.current.length >= 5) {
+    // Calculate hand movement
+    let handMovement = 0;
+    if (recentWristPositionsRef.current.length >= 3) {
       for (let i = 1; i < recentWristPositionsRef.current.length; i++) {
         const prev = recentWristPositionsRef.current[i - 1];
         const curr = recentWristPositionsRef.current[i];
         const dx = curr.x - prev.x;
         const dy = curr.y - prev.y;
-        totalMovement += Math.sqrt(dx * dx + dy * dy);
+        handMovement += Math.sqrt(dx * dx + dy * dy);
       }
     }
     
-    // Running detected if hands are moving enough (threshold ~100 pixels total movement)
-    const isRunningDetected = totalMovement > 80;
+    // Running detected if: body oscillation OR hands moving (very lenient)
+    const isRunningDetected = shoulderOscillation > 8 || handMovement > 40;
     
-    // Smooth the running state with a score system
+    // Faster response: quick to detect, slower to stop
     if (isRunningDetected) {
-      runningScoreRef.current = Math.min(10, runningScoreRef.current + 3);
+      runningScoreRef.current = Math.min(10, runningScoreRef.current + 4);
     } else {
-      runningScoreRef.current = Math.max(0, runningScoreRef.current - 1);
+      runningScoreRef.current = Math.max(0, runningScoreRef.current - 0.5);
     }
     
-    setIsRunning(runningScoreRef.current >= 3);
+    setIsRunning(runningScoreRef.current >= 2);
     
     // JUMPING: Wrists above shoulders (arms raised up)
     if (smoothedWristY !== null) {
