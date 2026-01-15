@@ -249,9 +249,27 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       // Start detection loop
       detect();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Camera/detector setup error:", err);
-      setError("Failed to access camera or initialize pose detection. Please allow camera access.");
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to access camera or initialize pose detection.";
+      
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        errorMessage = "Camera permission was denied. Please allow camera access in your browser settings and refresh the page.";
+      } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
+        errorMessage = "No camera found. Please connect a camera and try again.";
+      } else if (err?.name === "NotReadableError" || err?.name === "TrackStartError") {
+        errorMessage = "Camera is in use by another application. Please close other apps using the camera and try again.";
+      } else if (err?.name === "OverconstrainedError") {
+        errorMessage = "Camera doesn't support the requested settings. Trying with default settings...";
+      } else if (err?.name === "SecurityError") {
+        errorMessage = "Camera access blocked due to security restrictions. Make sure you're using HTTPS.";
+      } else if (err?.message) {
+        errorMessage = `Camera error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
     }
   }, [detect]);
