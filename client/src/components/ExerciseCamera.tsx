@@ -158,10 +158,23 @@ export function ExerciseCamera({ exerciseType, difficulty }: ExerciseCameraProps
   if (error) {
     return (
       <div className="min-h-screen bg-zinc-900 flex items-center justify-center p-4">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <p className="text-white text-xl mb-4">{error}</p>
-          <Button onClick={handleGoHome}>Go Back</Button>
+          <p className="text-white text-xl mb-4">Camera Access Required</p>
+          <p className="text-muted-foreground mb-6">
+            This exercise requires camera access for pose detection. 
+            {window.location.hostname.includes('replit') && (
+              <span className="block mt-2 text-yellow-400">
+                Note: Camera access doesn't work in the Replit preview. 
+                Please publish the app and open it in a new browser tab to use the camera features.
+              </span>
+            )}
+          </p>
+          <div className="space-y-3">
+            <Button onClick={handleGoHome} className="w-full" data-testid="button-go-back">
+              Go Back
+            </Button>
+          </div>
         </div>
       </div>
     );
