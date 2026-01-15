@@ -47,6 +47,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     error,
     isBodyDetected,
     repCount,
+    debugInfo,
     startCamera,
     stopCamera,
     enableCounting,
@@ -274,6 +275,9 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
               <div className="bg-black/60 backdrop-blur-sm rounded-2xl px-12 py-6 text-center">
                 <p className="text-6xl font-bold text-white">{repCount}</p>
                 <p className="text-muted-foreground text-lg">/ {config.targetReps} reps</p>
+                {debugInfo && (
+                  <p className="text-yellow-400 text-sm mt-2">{debugInfo}</p>
+                )}
               </div>
             </div>
           </>
