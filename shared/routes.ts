@@ -1,6 +1,5 @@
-
 import { z } from 'zod';
-import { insertEntrySchema, entries } from './schema';
+import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions } from './schema';
 
 // ============================================
 // SHARED ERROR SCHEMAS
@@ -47,7 +46,32 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
-    // Optional: Get single entry or update if needed later
+  },
+  workoutSessions: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/workout-sessions',
+      responses: {
+        200: z.array(z.custom<typeof workoutSessions.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/workout-sessions',
+      input: insertWorkoutSessionSchema,
+      responses: {
+        201: z.custom<typeof workoutSessions.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/workout-sessions/:id',
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
   },
 };
 
@@ -72,3 +96,7 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
 export type EntryInput = z.infer<typeof api.entries.create.input>;
 export type EntryResponse = z.infer<typeof api.entries.create.responses[201]>;
 export type EntriesListResponse = z.infer<typeof api.entries.list.responses[200]>;
+
+export type WorkoutSessionInput = z.infer<typeof api.workoutSessions.create.input>;
+export type WorkoutSessionResponse = z.infer<typeof api.workoutSessions.create.responses[201]>;
+export type WorkoutSessionsListResponse = z.infer<typeof api.workoutSessions.list.responses[200]>;
