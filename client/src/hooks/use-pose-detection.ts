@@ -20,6 +20,25 @@ interface UsePoseDetectionResult {
   resetReps: () => void;
 }
 
+// Smoothing buffer for angle values
+interface AngleBuffer {
+  values: number[];
+  maxSize: number;
+}
+
+function createAngleBuffer(maxSize: number = 5): AngleBuffer {
+  return { values: [], maxSize };
+}
+
+function addToBuffer(buffer: AngleBuffer, value: number): number {
+  buffer.values.push(value);
+  if (buffer.values.length > buffer.maxSize) {
+    buffer.values.shift();
+  }
+  // Return smoothed average
+  return buffer.values.reduce((a, b) => a + b, 0) / buffer.values.length;
+}
+
 export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionResult {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,9 +54,28 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const [repCount, setRepCount] = useState(0);
   const [isCountingEnabled, setIsCountingEnabled] = useState(false);
   
-  // Exercise state tracking
-  const exercisePhaseRef = useRef<"up" | "down">("up");
+  // Exercise state tracking with hysteresis
+  const exercisePhaseRef = useRef<"up" | "down" | "transitioning">("up");
   const countingEnabledRef = useRef(false);
+  const angleBufferRef = useRef<AngleBuffer>(createAngleBuffer(5));
+  const lastValidAngleRef = useRef<number>(180);
+  
+  // Thresholds with hysteresis to prevent flickering
+  const getThresholds = () => {
+    if (exerciseType === "pushups") {
+      return {
+        downThreshold: 100,      // Trigger down when angle < 100
+        upThreshold: 140,        // Trigger up when angle > 140
+        minConfidence: 0.25,     // Minimum keypoint confidence
+      };
+    } else {
+      return {
+        downThreshold: 110,      // Squats have wider angles
+        upThreshold: 145,
+        minConfidence: 0.25,
+      };
+    }
+  };
 
   // Calculate angle between 3 points
   const calculateAngle = (
@@ -51,53 +89,95 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     return angle;
   };
 
-  // Process pose for rep counting
+  // Get best angle from both sides (360-degree detection)
+  const getBestAngle = (
+    keypoints: poseDetection.Keypoint[],
+    joint1Names: [string, string], // left and right options for first joint
+    joint2Names: [string, string], // left and right options for middle joint (angle vertex)
+    joint3Names: [string, string], // left and right options for third joint
+    minConfidence: number
+  ): number | null => {
+    const getPoint = (name: string) => keypoints.find(k => k.name === name);
+    const isValid = (p: poseDetection.Keypoint | undefined) => p && (p.score ?? 0) > minConfidence;
+    
+    const angles: number[] = [];
+    
+    // Try left side
+    const left1 = getPoint(joint1Names[0]);
+    const left2 = getPoint(joint2Names[0]);
+    const left3 = getPoint(joint3Names[0]);
+    
+    if (isValid(left1) && isValid(left2) && isValid(left3)) {
+      angles.push(calculateAngle(left1!, left2!, left3!));
+    }
+    
+    // Try right side
+    const right1 = getPoint(joint1Names[1]);
+    const right2 = getPoint(joint2Names[1]);
+    const right3 = getPoint(joint3Names[1]);
+    
+    if (isValid(right1) && isValid(right2) && isValid(right3)) {
+      angles.push(calculateAngle(right1!, right2!, right3!));
+    }
+    
+    if (angles.length === 0) return null;
+    
+    // Use the minimum angle (most bent position) for more accurate detection
+    // This helps when one side is more visible than the other
+    return Math.min(...angles);
+  };
+
+  // Process pose for rep counting with improved accuracy
   const processPose = useCallback((keypoints: poseDetection.Keypoint[]) => {
     if (!countingEnabledRef.current) return;
     
-    const getPoint = (name: string) => keypoints.find(k => k.name === name);
-    const isValid = (p: poseDetection.Keypoint | undefined) => p && (p.score ?? 0) > 0.3;
-    
-    let currentAngle = 180;
+    const thresholds = getThresholds();
+    let currentAngle: number | null = null;
     
     if (exerciseType === "pushups") {
-      // Use elbow angle for pushups
-      const shoulder = getPoint("left_shoulder") || getPoint("right_shoulder");
-      const elbow = getPoint("left_elbow") || getPoint("right_elbow");
-      const wrist = getPoint("left_wrist") || getPoint("right_wrist");
-      
-      if (isValid(shoulder) && isValid(elbow) && isValid(wrist)) {
-        currentAngle = calculateAngle(shoulder!, elbow!, wrist!);
-      }
-      
-      // Pushup: down when elbow < 90, up when > 150
-      if (currentAngle < 90 && exercisePhaseRef.current === "up") {
-        exercisePhaseRef.current = "down";
-      } else if (currentAngle > 150 && exercisePhaseRef.current === "down") {
-        exercisePhaseRef.current = "up";
-        setRepCount(prev => prev + 1);
-      }
+      // Use elbow angle for pushups - check both arms
+      currentAngle = getBestAngle(
+        keypoints,
+        ["left_shoulder", "right_shoulder"],
+        ["left_elbow", "right_elbow"],
+        ["left_wrist", "right_wrist"],
+        thresholds.minConfidence
+      );
     } else {
-      // Use knee angle for squats
-      const hip = getPoint("left_hip") || getPoint("right_hip");
-      const knee = getPoint("left_knee") || getPoint("right_knee");
-      const ankle = getPoint("left_ankle") || getPoint("right_ankle");
-      
-      if (isValid(hip) && isValid(knee) && isValid(ankle)) {
-        currentAngle = calculateAngle(hip!, knee!, ankle!);
-      }
-      
-      // Squat: down when knee < 100, up when > 150
-      if (currentAngle < 100 && exercisePhaseRef.current === "up") {
+      // Use knee angle for squats - check both legs
+      currentAngle = getBestAngle(
+        keypoints,
+        ["left_hip", "right_hip"],
+        ["left_knee", "right_knee"],
+        ["left_ankle", "right_ankle"],
+        thresholds.minConfidence
+      );
+    }
+    
+    if (currentAngle === null) return;
+    
+    // Apply smoothing
+    const smoothedAngle = addToBuffer(angleBufferRef.current, currentAngle);
+    lastValidAngleRef.current = smoothedAngle;
+    
+    // State machine with hysteresis
+    const phase = exercisePhaseRef.current;
+    
+    if (phase === "up") {
+      // Looking for down position
+      if (smoothedAngle < thresholds.downThreshold) {
         exercisePhaseRef.current = "down";
-      } else if (currentAngle > 150 && exercisePhaseRef.current === "down") {
+      }
+    } else if (phase === "down") {
+      // Looking for up position - this completes a rep
+      if (smoothedAngle > thresholds.upThreshold) {
         exercisePhaseRef.current = "up";
         setRepCount(prev => prev + 1);
       }
     }
   }, [exerciseType]);
 
-  // Draw skeleton on canvas
+  // Draw skeleton on canvas with 360-degree visibility
   const drawSkeleton = useCallback((keypoints: poseDetection.Keypoint[], canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -106,13 +186,18 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     canvas.height = video.videoHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Connections to draw
+    // All body connections to draw (both sides)
     const connections = [
+      // Head and torso
+      ["nose", "left_eye"], ["nose", "right_eye"],
+      ["left_eye", "left_ear"], ["right_eye", "right_ear"],
       ["left_shoulder", "right_shoulder"],
-      ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
-      ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
       ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
       ["left_hip", "right_hip"],
+      // Arms
+      ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
+      ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+      // Legs
       ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
       ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
     ];
@@ -121,12 +206,12 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     
     // Draw lines
     ctx.strokeStyle = "#ff3333";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     
     connections.forEach(([a, b]) => {
       const p1 = getPoint(a);
       const p2 = getPoint(b);
-      if (p1 && p2 && (p1.score ?? 0) > 0.3 && (p2.score ?? 0) > 0.3) {
+      if (p1 && p2 && (p1.score ?? 0) > 0.2 && (p2.score ?? 0) > 0.2) {
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
         ctx.lineTo(p2.x, p2.y);
@@ -134,14 +219,24 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       }
     });
     
-    // Draw points
+    // Draw points with different colors based on confidence
     keypoints.forEach(kp => {
-      if ((kp.score ?? 0) > 0.3) {
+      const confidence = kp.score ?? 0;
+      if (confidence > 0.2) {
         ctx.beginPath();
-        ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = "#ffffff";
+        ctx.arc(kp.x, kp.y, 6, 0, 2 * Math.PI);
+        
+        // Color based on confidence: green = high, yellow = medium, red = low
+        if (confidence > 0.6) {
+          ctx.fillStyle = "#00ff00";
+        } else if (confidence > 0.4) {
+          ctx.fillStyle = "#ffff00";
+        } else {
+          ctx.fillStyle = "#ff6600";
+        }
+        
         ctx.fill();
-        ctx.strokeStyle = "#ff3333";
+        ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.stroke();
       }
@@ -164,9 +259,10 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
         
         if (poses.length > 0 && poses[0].keypoints) {
           const keypoints = poses[0].keypoints;
-          const validPoints = keypoints.filter(k => (k.score ?? 0) > 0.3);
+          const validPoints = keypoints.filter(k => (k.score ?? 0) > 0.25);
           
-          setIsBodyDetected(validPoints.length >= 10);
+          // Need at least 8 valid points for body detection
+          setIsBodyDetected(validPoints.length >= 8);
           drawSkeleton(keypoints, canvasRef.current!, video);
           processPose(keypoints);
         } else {
@@ -193,7 +289,11 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       // Step 2: Get camera
       setLoadingStatus("Requesting camera access...");
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480 },
+        video: { 
+          width: { ideal: 640 }, 
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
         audio: false,
       });
       
@@ -273,6 +373,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const enableCounting = useCallback(() => {
     countingEnabledRef.current = true;
     exercisePhaseRef.current = "up";
+    angleBufferRef.current = createAngleBuffer(5);
     setIsCountingEnabled(true);
   }, []);
 
@@ -284,6 +385,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const resetReps = useCallback(() => {
     setRepCount(0);
     exercisePhaseRef.current = "up";
+    angleBufferRef.current = createAngleBuffer(5);
   }, []);
 
   // Cleanup on unmount
