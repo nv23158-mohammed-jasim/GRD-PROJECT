@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { usePoseDetection, type ExerciseType } from "@/hooks/use-pose-detection";
 import { useCreateWorkoutSession } from "@/hooks/use-workout-sessions";
 import { getDifficultyConfig, type DifficultyLevel, type IntensityLevel, type Grade } from "@shared/schema";
-import { Check, Loader2, AlertCircle, ExternalLink } from "lucide-react";
+import { Check, Loader2, AlertCircle, ExternalLink, Square, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 
@@ -35,6 +35,20 @@ function getGradeColor(grade: Grade): string {
   }
 }
 
+// Audio guidance using browser speech synthesis
+function speak(text: string, enabled: boolean) {
+  if (!enabled || !window.speechSynthesis) return;
+  
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+  
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.2;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  window.speechSynthesis.speak(utterance);
+}
+
 export function ExerciseCamera({ exerciseType, difficulty, intensity }: ExerciseCameraProps) {
   const [, setLocation] = useLocation();
   const config = getDifficultyConfig(exerciseType, difficulty, intensity);
@@ -48,6 +62,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     isBodyDetected,
     repCount,
     debugInfo,
+    exercisePhase,
     startCamera,
     stopCamera,
     enableCounting,
@@ -61,9 +76,16 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
   const [timeRemaining, setTimeRemaining] = useState(config.timeLimit);
   const [finalReps, setFinalReps] = useState(0);
   const [grade, setGrade] = useState<Grade | null>(null);
+  const [audioEnabled, setAudioEnabled] = useState(true);
   
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<number | null>(null);
+  const lastRepCountRef = useRef<number>(0);
+  const lastPhaseRef = useRef<string>("");
+  const guidanceTimeoutRef = useRef<number | null>(null);
+  const phaseStartTimeRef = useRef<number>(0);
+  const announced30Ref = useRef<boolean>(false);
+  const announced10Ref = useRef<boolean>(false);
 
   // Start camera on mount
   useEffect(() => {
@@ -71,16 +93,60 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     return () => {
       stopCamera();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (guidanceTimeoutRef.current) clearTimeout(guidanceTimeoutRef.current);
     };
   }, [startCamera, stopCamera]);
 
-  const finishWorkout = useCallback(async (reps: number, elapsed: number) => {
+  // Audio guidance based on exercise phase and reps
+  useEffect(() => {
+    if (workoutState !== "active" || !audioEnabled) return;
+    
+    // Rep completion feedback
+    if (repCount > lastRepCountRef.current) {
+      const messages = ["Good!", "Nice!", "Keep going!", "Great rep!"];
+      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+      speak(randomMessage, audioEnabled);
+      lastRepCountRef.current = repCount;
+    }
+    
+    // Phase change guidance
+    if (exercisePhase !== lastPhaseRef.current) {
+      lastPhaseRef.current = exercisePhase;
+      phaseStartTimeRef.current = Date.now();
+      
+      // Clear any pending guidance
+      if (guidanceTimeoutRef.current) {
+        clearTimeout(guidanceTimeoutRef.current);
+      }
+      
+      // Set up delayed guidance if staying in same phase too long
+      guidanceTimeoutRef.current = window.setTimeout(() => {
+        if (exercisePhase === "up") {
+          speak("Go down more", audioEnabled);
+        } else if (exercisePhase === "down") {
+          speak("Come back up", audioEnabled);
+        }
+      }, 3000); // 3 seconds in same phase triggers guidance
+    }
+  }, [repCount, exercisePhase, workoutState, audioEnabled]);
+
+  const finishWorkout = useCallback(async (reps: number, elapsed: number, wasEarlyStop: boolean = false) => {
     disableCounting();
     setWorkoutState("finished");
     setFinalReps(reps);
     
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (guidanceTimeoutRef.current) clearTimeout(guidanceTimeoutRef.current);
+    
     const finalGrade = calculateGrade(reps, config.targetReps);
     setGrade(finalGrade);
+    
+    // Announce results
+    if (wasEarlyStop) {
+      speak(`Workout stopped. You completed ${reps} reps.`, audioEnabled);
+    } else {
+      speak(`Time's up! You completed ${reps} reps. Grade: ${finalGrade}`, audioEnabled);
+    }
     
     try {
       await createSession.mutateAsync({
@@ -96,7 +162,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     } catch (err) {
       console.error("Failed to save:", err);
     }
-  }, [config, exerciseType, difficulty, intensity, createSession, disableCounting]);
+  }, [config, exerciseType, difficulty, intensity, createSession, disableCounting, audioEnabled]);
 
   const handleStart = () => {
     if (!isBodyDetected) return;
@@ -106,6 +172,12 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     setWorkoutState("active");
     startTimeRef.current = Date.now();
     setTimeRemaining(config.timeLimit);
+    lastRepCountRef.current = 0;
+    lastPhaseRef.current = "";
+    announced30Ref.current = false;
+    announced10Ref.current = false;
+    
+    speak("Starting workout. Go!", audioEnabled);
     
     // Start timer
     timerRef.current = window.setInterval(() => {
@@ -113,10 +185,25 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
       const remaining = Math.max(0, config.timeLimit - elapsed);
       setTimeRemaining(remaining);
       
+      // Announce time remaining at intervals (only once each)
+      if (remaining <= 30 && remaining > 25 && !announced30Ref.current && audioEnabled) {
+        announced30Ref.current = true;
+        speak("30 seconds left", true);
+      } else if (remaining <= 10 && remaining > 5 && !announced10Ref.current && audioEnabled) {
+        announced10Ref.current = true;
+        speak("10 seconds", true);
+      }
+      
       if (remaining <= 0) {
         if (timerRef.current) clearInterval(timerRef.current);
       }
     }, 100);
+  };
+
+  // Handle early stop
+  const handleStop = () => {
+    const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    finishWorkout(repCount, elapsed, true);
   };
 
   // Watch for timer end
@@ -124,7 +211,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     if (workoutState === "active" && timeRemaining <= 0) {
       if (timerRef.current) clearInterval(timerRef.current);
       const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      finishWorkout(repCount, elapsed);
+      finishWorkout(repCount, elapsed, false);
     }
   }, [timeRemaining, workoutState, repCount, finishWorkout]);
 
@@ -135,10 +222,14 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     setGrade(null);
     setFinalReps(0);
     startTimeRef.current = 0;
+    lastRepCountRef.current = 0;
+    announced30Ref.current = false;
+    announced10Ref.current = false;
   };
 
   const handleGoHome = () => {
     stopCamera();
+    window.speechSynthesis?.cancel();
     setLocation("/");
   };
 
@@ -254,6 +345,31 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
           </div>
         )}
         
+        {/* Audio toggle */}
+        {!isLoading && (
+          <div className="absolute top-16 left-4 z-10">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const newState = !audioEnabled;
+                setAudioEnabled(newState);
+                if (!newState) {
+                  window.speechSynthesis?.cancel();
+                }
+              }}
+              className="bg-black/50"
+              data-testid="button-audio-toggle"
+            >
+              {audioEnabled ? (
+                <Volume2 className="w-5 h-5 text-white" />
+              ) : (
+                <VolumeX className="w-5 h-5 text-white" />
+              )}
+            </Button>
+          </div>
+        )}
+        
         {/* Exercise info */}
         <div className="absolute top-4 right-4 z-10">
           <div className="bg-black/60 backdrop-blur-sm rounded-lg p-4">
@@ -280,6 +396,18 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
                 )}
               </div>
             </div>
+            
+            {/* Stop button during workout */}
+            <div className="absolute bottom-4 right-4 z-10">
+              <Button 
+                variant="destructive" 
+                onClick={handleStop}
+                data-testid="button-stop-workout"
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Stop & Save
+              </Button>
+            </div>
           </>
         )}
         
@@ -296,6 +424,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
                 className="px-12 py-6 text-xl"
                 onClick={handleStart}
                 disabled={!isBodyDetected}
+                data-testid="button-start-workout"
               >
                 {isBodyDetected ? "Start Exercise" : "Get in Position"}
               </Button>
@@ -305,7 +434,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
         
         {/* Back button */}
         <div className="absolute bottom-4 left-4 z-10">
-          <Button variant="ghost" onClick={handleGoHome}>
+          <Button variant="ghost" onClick={handleGoHome} data-testid="button-back">
             Back
           </Button>
         </div>

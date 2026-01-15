@@ -14,6 +14,7 @@ interface UsePoseDetectionResult {
   repCount: number;
   isCountingEnabled: boolean;
   debugInfo: string;
+  exercisePhase: "up" | "down";
   startCamera: () => Promise<void>;
   stopCamera: () => void;
   enableCounting: () => void;
@@ -54,6 +55,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const [repCount, setRepCount] = useState(0);
   const [isCountingEnabled, setIsCountingEnabled] = useState(false);
   const [debugInfo, setDebugInfo] = useState("");
+  const [exercisePhase, setExercisePhase] = useState<"up" | "down">("up");
   
   // Exercise state tracking
   const exercisePhaseRef = useRef<"up" | "down">("up");
@@ -150,8 +152,10 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       if (exercisePhaseRef.current === "up" && smoothedAngle < downThreshold) {
         exercisePhaseRef.current = "down";
+        setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && smoothedAngle > upThreshold) {
         exercisePhaseRef.current = "up";
+        setExercisePhase("up");
         setRepCount(prev => prev + 1);
       }
       
@@ -212,8 +216,10 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       if (exercisePhaseRef.current === "up" && depthChange > downThreshold) {
         exercisePhaseRef.current = "down";
+        setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && depthChange < upThreshold) {
         exercisePhaseRef.current = "up";
+        setExercisePhase("up");
         setRepCount(prev => prev + 1);
       }
     }
@@ -410,6 +416,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const enableCounting = useCallback(() => {
     countingEnabledRef.current = true;
     exercisePhaseRef.current = "up";
+    setExercisePhase("up");
     valueBufferRef.current = createValueBuffer(5);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
@@ -424,6 +431,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const resetReps = useCallback(() => {
     setRepCount(0);
     exercisePhaseRef.current = "up";
+    setExercisePhase("up");
     valueBufferRef.current = createValueBuffer(5);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
@@ -445,6 +453,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     repCount,
     isCountingEnabled,
     debugInfo,
+    exercisePhase,
     startCamera,
     stopCamera,
     enableCounting,
