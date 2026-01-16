@@ -495,13 +495,61 @@ export default function BoxingModePage() {
                   )}
 
                   {screen === "round" && currentCommand && (
-                    <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-8 py-4 rounded-xl text-3xl font-bold transition-all ${
-                      commandFeedback === "success" ? "bg-green-500/80 scale-110" :
-                      commandFeedback === "miss" ? "bg-red-500/80 scale-90" :
-                      "bg-red-600/90 animate-pulse"
-                    }`}>
-                      {currentCommand.label}
-                    </div>
+                    <>
+                      {(currentCommand.type === "jab_left" || currentCommand.type === "hook_left") && (
+                        <div className={`absolute left-8 top-1/2 -translate-y-1/2 transition-all duration-200 ${
+                          commandFeedback === "success" ? "scale-150 opacity-0" : 
+                          commandFeedback === "miss" ? "scale-50 opacity-50" : "animate-pulse"
+                        }`}>
+                          <div className="w-24 h-24 rounded-full bg-blue-500 shadow-[0_0_30px_10px_rgba(59,130,246,0.6)] flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">PUNCH</span>
+                          </div>
+                        </div>
+                      )}
+                      {(currentCommand.type === "jab_right" || currentCommand.type === "hook_right") && (
+                        <div className={`absolute right-8 top-1/2 -translate-y-1/2 transition-all duration-200 ${
+                          commandFeedback === "success" ? "scale-150 opacity-0" : 
+                          commandFeedback === "miss" ? "scale-50 opacity-50" : "animate-pulse"
+                        }`}>
+                          <div className="w-24 h-24 rounded-full bg-blue-500 shadow-[0_0_30px_10px_rgba(59,130,246,0.6)] flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">PUNCH</span>
+                          </div>
+                        </div>
+                      )}
+                      {currentCommand.type === "dodge_left" && (
+                        <div className={`absolute left-8 top-1/3 transition-all duration-200 ${
+                          commandFeedback === "success" ? "scale-150 opacity-0" : 
+                          commandFeedback === "miss" ? "scale-50 opacity-50" : "animate-pulse"
+                        }`}>
+                          <div className="w-20 h-20 rounded-full bg-red-500 shadow-[0_0_30px_10px_rgba(239,68,68,0.6)] flex items-center justify-center">
+                            <span className="text-white font-bold text-sm">DODGE</span>
+                          </div>
+                          <div className="text-center mt-2 text-white font-bold animate-bounce">← MOVE</div>
+                        </div>
+                      )}
+                      {currentCommand.type === "dodge_right" && (
+                        <div className={`absolute right-8 top-1/3 transition-all duration-200 ${
+                          commandFeedback === "success" ? "scale-150 opacity-0" : 
+                          commandFeedback === "miss" ? "scale-50 opacity-50" : "animate-pulse"
+                        }`}>
+                          <div className="w-20 h-20 rounded-full bg-red-500 shadow-[0_0_30px_10px_rgba(239,68,68,0.6)] flex items-center justify-center">
+                            <span className="text-white font-bold text-sm">DODGE</span>
+                          </div>
+                          <div className="text-center mt-2 text-white font-bold animate-bounce">MOVE →</div>
+                        </div>
+                      )}
+                      {currentCommand.type === "block" && (
+                        <div className={`absolute left-1/2 -translate-x-1/2 top-8 transition-all duration-200 ${
+                          commandFeedback === "success" ? "scale-150 opacity-0" : 
+                          commandFeedback === "miss" ? "scale-50 opacity-50" : "animate-pulse"
+                        }`}>
+                          <div className="w-24 h-24 rounded-full bg-red-500 shadow-[0_0_30px_10px_rgba(239,68,68,0.6)] flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">BLOCK</span>
+                          </div>
+                          <div className="text-center mt-2 text-white font-bold">ARMS UP!</div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {screen === "round" && (
@@ -590,10 +638,15 @@ export default function BoxingModePage() {
 
                   <div className="mt-6 p-4 bg-zinc-800/50 rounded-lg">
                     <h3 className="font-semibold mb-2">How to Play</h3>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li><strong>JAB/HOOK:</strong> Punch forward with the indicated hand</li>
-                      <li><strong>DODGE:</strong> Move your head left or right</li>
-                      <li><strong>BLOCK:</strong> Raise both hands above your shoulders</li>
+                    <ul className="text-sm text-muted-foreground space-y-2">
+                      <li className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-blue-500 inline-block"></span>
+                        <strong>BLUE SPOT:</strong> Punch it with the hand on that side
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-red-500 inline-block"></span>
+                        <strong>RED SPOT:</strong> Dodge away or block (arms up)
+                      </li>
                     </ul>
                   </div>
                 </CardContent>
