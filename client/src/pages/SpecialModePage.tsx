@@ -73,6 +73,7 @@ export default function SpecialModePage() {
   const lastSitupTimeRef = useRef(0);
   const baselineRatioRef = useRef<number | null>(null);
   const calibrationCountRef = useRef(0);
+  const hasCompletedCycleRef = useRef(false); // Require one full cycle before counting hits
   
   // Audio feedback
   const speak = useCallback((text: string) => {
@@ -164,14 +165,13 @@ export default function SpecialModePage() {
   }, []);
 
   // Situp detection for sideways body position
+  // User lies on their side facing the camera. During a situp, shoulder moves UP (y decreases) relative to hip
   const processPose = useCallback((keypoints: poseDetection.Keypoint[]) => {
     if (screen !== "playing") return;
     
     const minConfidence = 0.3;
     
-    // For sideways position, we track the relationship between shoulder and hip
-    // When doing a situp sideways, the upper body rises (shoulder moves up relative to hip)
-    // Get best visible shoulder, hip, and knee (prefer left, fallback to right)
+    // Get keypoints - for sideways situps we need shoulder and hip
     const leftShoulder = keypoints.find(k => k.name === "left_shoulder");
     const rightShoulder = keypoints.find(k => k.name === "right_shoulder");
     const shoulder = (leftShoulder && (leftShoulder.score ?? 0) > minConfidence) ? leftShoulder :
@@ -182,10 +182,9 @@ export default function SpecialModePage() {
     const hip = (leftHip && (leftHip.score ?? 0) > minConfidence) ? leftHip :
                 (rightHip && (rightHip.score ?? 0) > minConfidence) ? rightHip : null;
     
-    const leftKnee = keypoints.find(k => k.name === "left_knee");
-    const rightKnee = keypoints.find(k => k.name === "right_knee");
-    const knee = (leftKnee && (leftKnee.score ?? 0) > minConfidence) ? leftKnee :
-                 (rightKnee && (rightKnee.score ?? 0) > minConfidence) ? rightKnee : null;
+    // Also get nose for alternative detection
+    const nose = keypoints.find(k => k.name === "nose");
+    const noseValid = nose && (nose.score ?? 0) > minConfidence;
     
     const shoulderValid = shoulder !== null;
     const hipValid = hip !== null;
@@ -197,60 +196,67 @@ export default function SpecialModePage() {
     
     setBodyDetected(true);
     
-    // Calculate vertical distance between shoulder and hip
-    // Normalized by hip-to-knee distance or frame height
-    let referenceHeight: number;
-    if (knee && (knee.score ?? 0) > minConfidence) {
-      referenceHeight = Math.abs(knee.y - hip!.y);
-    } else {
-      referenceHeight = (videoRef.current?.videoHeight || 480) * 0.25;
-    }
+    // Use shoulder Y position relative to hip Y
+    // When lying down sideways: shoulder and hip are at similar Y
+    // When sitting up: shoulder moves UP (lower Y value in screen coords)
+    const shoulderY = shoulder!.y;
+    const hipY = hip!.y;
+    const frameHeight = videoRef.current?.videoHeight || 480;
     
-    if (referenceHeight < 10) referenceHeight = 100;
+    // Normalize by frame height for consistency
+    const normalizedShoulderY = shoulderY / frameHeight;
+    const normalizedHipY = hipY / frameHeight;
     
-    // Ratio of shoulder-hip vertical distance to reference
-    const shoulderHipDist = hip!.y - shoulder!.y;
-    const ratio = shoulderHipDist / referenceHeight;
-    
-    // Calibrate baseline (lying down position)
-    if (calibrationCountRef.current < 15) {
+    // Calibrate baseline (resting position - shoulder at similar level or below hip)
+    if (calibrationCountRef.current < 20) {
       calibrationCountRef.current++;
-      if (baselineRatioRef.current === null || ratio < baselineRatioRef.current) {
-        baselineRatioRef.current = ratio;
+      const currentRatio = normalizedShoulderY - normalizedHipY;
+      if (baselineRatioRef.current === null) {
+        baselineRatioRef.current = currentRatio;
+      } else {
+        // Average the baseline
+        baselineRatioRef.current = baselineRatioRef.current * 0.9 + currentRatio * 0.1;
       }
       return;
     }
     
-    const baseline = baselineRatioRef.current || 0.5;
-    const change = ratio - baseline;
+    // Current shoulder position relative to hip
+    const currentRatio = normalizedShoulderY - normalizedHipY;
+    const baseline = baselineRatioRef.current || 0;
     
-    // When sitting up, shoulder rises (gets further from hip in Y), change increases
-    const downThreshold = 0.15;  // Torso up enough
-    const upThreshold = 0.05;    // Back down
+    // When sitting up from sideways: shoulder moves UP (Y decreases), so currentRatio becomes more negative
+    // Change = baseline - currentRatio (positive when sitting up)
+    const change = baseline - currentRatio;
+    
+    // Thresholds - sitting up should show shoulder rising relative to hip
+    const situpThreshold = 0.08;   // Shoulder moved up this much relative to baseline
+    const restThreshold = 0.03;    // Back to resting position
     
     const now = Date.now();
-    const MIN_SITUP_INTERVAL = 600;
+    const MIN_SITUP_INTERVAL = 500;
     
-    if (situpPhaseRef.current === "up" && change > downThreshold) {
+    // Phase: "up" means resting (lying down), "down" means in situp position (torso raised)
+    if (situpPhaseRef.current === "up" && change > situpThreshold) {
+      // User is sitting up
       situpPhaseRef.current = "down";
       setIsSitupDown(true);
-    } else if (situpPhaseRef.current === "down" && change < upThreshold) {
-      if (now - lastSitupTimeRef.current >= MIN_SITUP_INTERVAL) {
-        situpPhaseRef.current = "up";
-        setIsSitupDown(false);
+      
+      // HIT THE BALL when user sits up (only after completing first cycle to avoid calibration issues)
+      if (hasCompletedCycleRef.current && currentBall?.active && now - lastSitupTimeRef.current >= MIN_SITUP_INTERVAL) {
         lastSitupTimeRef.current = now;
-        
-        // Hit the ball!
-        if (currentBall?.active) {
-          setBallsHit(prev => prev + 1);
-          speak("Hit!");
-          setCurrentBall(null);
-          if (ballTimeoutRef.current) {
-            clearTimeout(ballTimeoutRef.current);
-            ballTimeoutRef.current = null;
-          }
+        setBallsHit(prev => prev + 1);
+        speak("Hit!");
+        setCurrentBall(null);
+        if (ballTimeoutRef.current) {
+          clearTimeout(ballTimeoutRef.current);
+          ballTimeoutRef.current = null;
         }
       }
+    } else if (situpPhaseRef.current === "down" && change < restThreshold) {
+      // User returned to resting position - this completes a cycle
+      situpPhaseRef.current = "up";
+      setIsSitupDown(false);
+      hasCompletedCycleRef.current = true; // Now we know the user can do situps correctly
     }
   }, [screen, currentBall, speak]);
 
@@ -493,6 +499,7 @@ export default function SpecialModePage() {
     calibrationCountRef.current = 0;
     baselineRatioRef.current = null;
     situpPhaseRef.current = "up";
+    hasCompletedCycleRef.current = false; // Reset cycle requirement for new game
     setScreen("countdown");
   };
 

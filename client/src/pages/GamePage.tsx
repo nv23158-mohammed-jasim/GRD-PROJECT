@@ -101,6 +101,12 @@ export default function GamePage() {
   const scoreRef = useRef(0);
   const gameStartTimeRef = useRef<number>(0);
   
+  // Pushup calibration ref - can be reset from outside pose detection loop
+  const pushupCalibrationRef = useRef({ baselineY: 0, calibrated: false, frames: 0 });
+  
+  // Screen ref for accessing current screen in pose detection loop
+  const screenRef = useRef<GameScreen>("menu");
+  
   // Game history
   const { data: gameSessions = [], isLoading: historyLoading } = useQuery<GameSession[]>({
     queryKey: ["/api/game-sessions"],
@@ -147,6 +153,11 @@ export default function GamePage() {
       } catch (e) { /* ignore */ }
     }
   }, []);
+  
+  // Sync screen ref with screen state for pose detection loop access
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
 
   // Save progress
   const saveProgress = useCallback((unlocked: number[], completed: number[]) => {
@@ -267,29 +278,82 @@ export default function GamePage() {
               const jumping = wristY !== null && wristY < shoulderY - 50;
               setIsJumping(jumping);
               
-              // PUSHUP: Detect arm bend with body low
-              const calcAngle = (p1: {x:number,y:number}, p2: {x:number,y:number}, p3: {x:number,y:number}) => {
-                const rad = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
-                let angle = Math.abs((rad * 180) / Math.PI);
-                return angle > 180 ? 360 - angle : angle;
-              };
+              // PUSHUP: 360-degree detection - ONLY active during pushup-challenge
+              // Uses dynamic calibration relative to current pushup position range
               
-              let elbowAngle = 180;
-              if (lShoulder && lElbow && lWrist) {
-                elbowAngle = calcAngle(lShoulder, lElbow, lWrist);
-              } else if (rShoulder && rElbow && rWrist) {
-                elbowAngle = calcAngle(rShoulder, rElbow, rWrist);
-              }
+              const isPushupChallenge = screenRef.current === "pushup-challenge";
               
-              const isDown = elbowAngle < 100 && shoulderY > calibration.shoulderY + 30;
-              const isUp = elbowAngle > 140;
-              
-              if (isDown && !pushupState.wasDown) {
-                pushupState.wasDown = true;
-              } else if (isUp && pushupState.wasDown) {
-                pushupState.wasDown = false;
-                // Signal pushup completed (will be handled by effect with cooldown)
-                setIsPushup(true);
+              if (isPushupChallenge) {
+                const noseKp = kps.find(k => k.name === "nose");
+                const noseY = noseKp && (noseKp.score ?? 0) > 0.3 ? noseKp.y : null;
+                
+                // Get a representative body Y (nose if visible, otherwise shoulder)
+                const bodyY = noseY ?? shoulderY;
+                
+                // Get frame height for normalized thresholds
+                const frameHeight = videoRef.current?.videoHeight || 240;
+                
+                // Pushup calibration: track the "up" position during pushup challenge
+                const pushupCal = pushupCalibrationRef.current;
+                if (!pushupCal.calibrated) {
+                  pushupCal.frames++;
+                  // Capture the initial position as baseline (user should be in "up" position)
+                  if (pushupCal.baselineY === 0 || bodyY < pushupCal.baselineY) {
+                    pushupCal.baselineY = bodyY;
+                  }
+                  if (pushupCal.frames >= 15) {
+                    pushupCal.calibrated = true;
+                  }
+                }
+                
+                // Calculate if user is in "down" position using relative movement
+                let isDown = false;
+                let isUp = false;
+                
+                if (pushupCal.calibrated) {
+                  const baseline = pushupCal.baselineY;
+                  // Normalized thresholds: ~15% and ~8% of frame height
+                  const downThreshold = frameHeight * 0.15;
+                  const upThreshold = frameHeight * 0.08;
+                  
+                  isDown = bodyY > baseline + downThreshold;
+                  isUp = bodyY < baseline + upThreshold;
+                  
+                  // Update baseline if user is higher (catches drift)
+                  if (bodyY < baseline - 10) {
+                    pushupCal.baselineY = bodyY;
+                  }
+                }
+                
+                // Fallback: Traditional elbow angle detection for side-angle pushups
+                if (!isDown && !isUp) {
+                  const calcAngle = (p1: {x:number,y:number}, p2: {x:number,y:number}, p3: {x:number,y:number}) => {
+                    const rad = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
+                    let angle = Math.abs((rad * 180) / Math.PI);
+                    return angle > 180 ? 360 - angle : angle;
+                  };
+                  
+                  let elbowAngle = 180;
+                  if (lShoulder && lElbow && lWrist) {
+                    elbowAngle = calcAngle(lShoulder, lElbow, lWrist);
+                  } else if (rShoulder && rElbow && rWrist) {
+                    elbowAngle = calcAngle(rShoulder, rElbow, rWrist);
+                  }
+                  
+                  if (elbowAngle < 100) {
+                    isDown = true;
+                  } else if (elbowAngle > 140) {
+                    isUp = true;
+                  }
+                }
+                
+                if (isDown && !pushupState.wasDown) {
+                  pushupState.wasDown = true;
+                } else if (isUp && pushupState.wasDown) {
+                  pushupState.wasDown = false;
+                  // Signal pushup completed (will be handled by effect with cooldown)
+                  setIsPushup(true);
+                }
               }
             }
           }
@@ -431,6 +495,8 @@ export default function GamePage() {
         
         if (healthRef.current <= 0) {
           running = false;
+          // Reset pushup calibration for fresh detection in pushup challenge
+          pushupCalibrationRef.current = { baselineY: 0, calibrated: false, frames: 0 };
           setScreen("pushup-challenge");
           setPushupCount(0);
           setPushupTimeLeft(30);
