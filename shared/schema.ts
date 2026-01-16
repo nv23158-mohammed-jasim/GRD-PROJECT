@@ -13,6 +13,18 @@ export const entries = pgTable("entries", {
   date: timestamp("date").defaultNow().notNull(),
 });
 
+// Game sessions (Neon Run game history)
+export const gameSessions = pgTable("game_sessions", {
+  id: serial("id").primaryKey(),
+  difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
+  stage: integer("stage").notNull(),
+  score: integer("score").notNull(),
+  targetScore: integer("target_score").notNull(),
+  completed: integer("completed").notNull(), // 1 = completed, 0 = failed
+  timePlayed: integer("time_played").notNull(), // in seconds
+  date: timestamp("date").defaultNow().notNull(),
+});
+
 // Workout sessions (pushups, squats with pose detection)
 export const workoutSessions = pgTable("workout_sessions", {
   id: serial("id").primaryKey(),
@@ -40,6 +52,11 @@ export const insertWorkoutSessionSchema = createInsertSchema(workoutSessions).om
   date: true,
 });
 
+export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
+  id: true,
+  date: true,
+});
+
 // === EXPLICIT API CONTRACT TYPES ===
 
 // Entry types
@@ -56,6 +73,13 @@ export type InsertWorkoutSession = z.infer<typeof insertWorkoutSessionSchema>;
 export type CreateWorkoutSessionRequest = InsertWorkoutSession;
 export type WorkoutSessionResponse = WorkoutSession;
 export type WorkoutSessionsListResponse = WorkoutSession[];
+
+// Game session types
+export type GameSession = typeof gameSessions.$inferSelect;
+export type InsertGameSession = z.infer<typeof insertGameSessionSchema>;
+export type CreateGameSessionRequest = InsertGameSession;
+export type GameSessionResponse = GameSession;
+export type GameSessionsListResponse = GameSession[];
 
 // Exercise and difficulty types
 export type ExerciseType = "pushups" | "squats";

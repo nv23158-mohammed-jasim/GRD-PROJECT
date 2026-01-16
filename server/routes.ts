@@ -71,5 +71,36 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === GAME SESSIONS ROUTES ===
+  app.get(api.gameSessions.list.path, async (req, res) => {
+    const sessions = await storage.getGameSessions();
+    res.json(sessions);
+  });
+
+  app.post(api.gameSessions.create.path, async (req, res) => {
+    try {
+      const input = api.gameSessions.create.input.parse(req.body);
+      const session = await storage.createGameSession(input);
+      res.status(201).json(session);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.delete(api.gameSessions.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(404).json({ message: "Invalid ID" });
+    }
+    await storage.deleteGameSession(id);
+    res.status(204).send();
+  });
+
   return httpServer;
 }

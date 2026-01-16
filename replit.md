@@ -18,6 +18,7 @@ The app includes "Neon Run" - a neon-themed side-scrolling game controlled by bo
 - **Movement System**: Character only moves when player jogs; enemies slow to 50% when player stops
 - **Stage Progression**: Complete stages to unlock the next; progress saved to localStorage
 - **Neon Aesthetic**: Purple/pink gradient sky, glowing player, colored enemies by type
+- **Game History**: All game sessions saved to database with score, stage, difficulty, time played, and completion status
 
 ## User Preferences
 
@@ -50,6 +51,7 @@ Preferred communication style: Simple, everyday language.
 - **Tables**:
   - `entries`: Daily fitness logs (steps, calories, weight, date)
   - `workout_sessions`: Exercise session records (type, difficulty, reps, grade, timing)
+  - `game_sessions`: Neon Run game records (stage, difficulty, score, time played, completion status)
 
 ### Project Structure
 

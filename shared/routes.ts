@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions } from './schema';
+import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions, insertGameSessionSchema, gameSessions } from './schema';
 
 // ============================================
 // SHARED ERROR SCHEMAS
@@ -73,6 +73,32 @@ export const api = {
       },
     },
   },
+  gameSessions: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/game-sessions',
+      responses: {
+        200: z.array(z.custom<typeof gameSessions.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/game-sessions',
+      input: insertGameSessionSchema,
+      responses: {
+        201: z.custom<typeof gameSessions.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/game-sessions/:id',
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
 };
 
 // ============================================
@@ -100,3 +126,7 @@ export type EntriesListResponse = z.infer<typeof api.entries.list.responses[200]
 export type WorkoutSessionInput = z.infer<typeof api.workoutSessions.create.input>;
 export type WorkoutSessionResponse = z.infer<typeof api.workoutSessions.create.responses[201]>;
 export type WorkoutSessionsListResponse = z.infer<typeof api.workoutSessions.list.responses[200]>;
+
+export type GameSessionInput = z.infer<typeof api.gameSessions.create.input>;
+export type GameSessionResponse = z.infer<typeof api.gameSessions.create.responses[201]>;
+export type GameSessionsListResponse = z.infer<typeof api.gameSessions.list.responses[200]>;

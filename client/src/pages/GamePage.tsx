@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Volume2, VolumeX, Play, RotateCcw, Lock, CheckCircle, Trophy } from "lucide-react";
+import { ArrowLeft, Volume2, VolumeX, Play, RotateCcw, Lock, CheckCircle, Trophy, History } from "lucide-react";
 import * as tf from "@tensorflow/tfjs";
 import * as poseDetection from "@tensorflow-models/pose-detection";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { GameSession } from "@shared/schema";
 
 // Game constants
 const GAME_WIDTH = 800;
@@ -96,6 +99,28 @@ export default function GamePage() {
   const lastEnemyRef = useRef(0);
   const healthRef = useRef(100);
   const scoreRef = useRef(0);
+  const gameStartTimeRef = useRef<number>(0);
+  
+  // Game history
+  const { data: gameSessions = [], isLoading: historyLoading } = useQuery<GameSession[]>({
+    queryKey: ["/api/game-sessions"],
+  });
+  
+  const saveGameMutation = useMutation({
+    mutationFn: async (session: {
+      difficulty: string;
+      stage: number;
+      score: number;
+      targetScore: number;
+      completed: number;
+      timePlayed: number;
+    }) => {
+      return apiRequest("/api/game-sessions", { method: "POST", body: JSON.stringify(session) });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/game-sessions"] });
+    },
+  });
 
   // Speak function
   const speak = useCallback((text: string) => {
@@ -432,6 +457,17 @@ export default function GamePage() {
         setCompletedStages(newCompleted);
         saveProgress(newUnlocked, newCompleted);
         
+        // Save game session to history
+        const timePlayed = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
+        saveGameMutation.mutate({
+          difficulty,
+          stage: selectedStage,
+          score: scoreRef.current,
+          targetScore: stageData.targetScore,
+          completed: 1,
+          timePlayed,
+        });
+        
         setScreen("stage-complete");
         speak("Stage complete!");
         return;
@@ -601,6 +637,17 @@ export default function GamePage() {
       setPushupTimeLeft(t => {
         if (t <= 1) {
           clearInterval(timer);
+          // Save failed game session
+          const timePlayed = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
+          const stageData = STAGES[selectedStage - 1];
+          saveGameMutation.mutate({
+            difficulty,
+            stage: selectedStage,
+            score: scoreRef.current,
+            targetScore: stageData.targetScore,
+            completed: 0,
+            timePlayed,
+          });
           setScreen("game-over");
           speak("Game over!");
           return 0;
@@ -610,7 +657,7 @@ export default function GamePage() {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [screen, speak]);
+  }, [screen, speak, selectedStage, difficulty, saveGameMutation]);
 
   // Count pushups during challenge with cooldown
   const lastPushupTimeRef = useRef(0);
@@ -745,6 +792,7 @@ export default function GamePage() {
     setHealth(100);
     scoreRef.current = 0;
     healthRef.current = 100;
+    gameStartTimeRef.current = Date.now();
     
     playerYRef.current = GROUND_Y - PLAYER_SIZE;
     playerVelocityRef.current = 0;
@@ -756,6 +804,20 @@ export default function GamePage() {
     setScreen("playing");
     speak(`Stage ${stageId}. Go!`);
   };
+  
+  const saveGameSession = useCallback((finalScore: number, stageId: number, completed: boolean) => {
+    const timePlayed = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
+    const stageData = STAGES[stageId - 1];
+    
+    saveGameMutation.mutate({
+      difficulty,
+      stage: stageId,
+      score: finalScore,
+      targetScore: stageData.targetScore,
+      completed: completed ? 1 : 0,
+      timePlayed,
+    });
+  }, [difficulty, saveGameMutation]);
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -952,6 +1014,41 @@ export default function GamePage() {
                 <li>If health depletes: 10 pushups = revive!</li>
                 <li>Complete stages to unlock next ones</li>
               </ul>
+            </Card>
+
+            <Card className="p-4" data-testid="card-game-history">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <History className="w-4 h-4" />
+                Game History
+              </h3>
+              {historyLoading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : gameSessions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No games played yet</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {gameSessions.slice(0, 10).map((session) => (
+                    <div
+                      key={session.id}
+                      className={`flex items-center justify-between text-sm p-2 rounded ${
+                        session.completed ? "bg-green-500/10" : "bg-red-500/10"
+                      }`}
+                      data-testid={`game-session-${session.id}`}
+                    >
+                      <div>
+                        <span className="font-medium">Stage {session.stage}</span>
+                        <span className="text-muted-foreground ml-2 capitalize">{session.difficulty}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={session.completed ? "text-green-500" : "text-red-500"}>
+                          {session.score}/{session.targetScore}
+                        </span>
+                        <span className="text-muted-foreground ml-2">{session.timePlayed}s</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
           </div>
         </div>
