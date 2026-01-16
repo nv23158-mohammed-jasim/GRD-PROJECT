@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Volume2, VolumeX, Play, RotateCcw } from "lucide-react";
+import { ArrowLeft, Volume2, VolumeX, Play, RotateCcw, Lock, CheckCircle, Trophy } from "lucide-react";
 import * as tf from "@tensorflow/tfjs";
 import * as poseDetection from "@tensorflow-models/pose-detection";
 
@@ -11,14 +11,51 @@ const GAME_WIDTH = 800;
 const GAME_HEIGHT = 450;
 const GROUND_Y = 380;
 const PLAYER_SIZE = 60;
-const OBSTACLE_WIDTH = 50;
-const OBSTACLE_HEIGHT = 60;
 
-interface Obstacle {
+type Difficulty = "easy" | "medium" | "hard";
+type GameScreen = "menu" | "stage-select" | "playing" | "pushup-challenge" | "game-over" | "stage-complete";
+
+interface Enemy {
   x: number;
-  type: "jump" | "duck";
-  passed: boolean;
+  y: number;
+  width: number;
+  height: number;
+  speedX: number;
+  speedY: number;
+  type: "walker" | "flyer" | "bouncer";
+  color: string;
 }
+
+interface DifficultySettings {
+  name: string;
+  baseSpeed: number;
+  enemySpawnRate: number;
+  damage: number;
+  color: string;
+}
+
+const DIFFICULTIES: Record<Difficulty, DifficultySettings> = {
+  easy: { name: "Easy", baseSpeed: 3, enemySpawnRate: 3000, damage: 10, color: "#44ff44" },
+  medium: { name: "Medium", baseSpeed: 5, enemySpawnRate: 2000, damage: 15, color: "#ffaa00" },
+  hard: { name: "Hard", baseSpeed: 7, enemySpawnRate: 1200, damage: 25, color: "#ff4466" },
+};
+
+interface StageData {
+  id: number;
+  name: string;
+  targetScore: number;
+  enemyTypes: Enemy["type"][];
+  bgColor1: string;
+  bgColor2: string;
+}
+
+const STAGES: StageData[] = [
+  { id: 1, name: "Neon City", targetScore: 500, enemyTypes: ["walker"], bgColor1: "#1a0a2e", bgColor2: "#4a2c6e" },
+  { id: 2, name: "Sky Gardens", targetScore: 1000, enemyTypes: ["walker", "flyer"], bgColor1: "#0a2e1a", bgColor2: "#2e6e4a" },
+  { id: 3, name: "Fire Valley", targetScore: 1500, enemyTypes: ["walker", "flyer", "bouncer"], bgColor1: "#2e0a0a", bgColor2: "#6e2a2a" },
+  { id: 4, name: "Ice Peaks", targetScore: 2000, enemyTypes: ["walker", "flyer", "bouncer"], bgColor1: "#0a1a2e", bgColor2: "#2a4a6e" },
+  { id: 5, name: "Final Zone", targetScore: 3000, enemyTypes: ["walker", "flyer", "bouncer"], bgColor1: "#2e1a2e", bgColor2: "#6e4a6e" },
+];
 
 export default function GamePage() {
   const [, setLocation] = useLocation();
@@ -27,33 +64,38 @@ export default function GamePage() {
   const detectorRef = useRef<poseDetection.PoseDetector | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const gameLoopRef = useRef<number | null>(null);
-  const lastFrameTimeRef = useRef<number>(0);
   
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [gameOver, setGameOver] = useState(false);
+  
+  // Game state
+  const [screen, setScreen] = useState<GameScreen>("menu");
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
+  const [selectedStage, setSelectedStage] = useState(1);
+  const [unlockedStages, setUnlockedStages] = useState<number[]>([1]);
+  const [completedStages, setCompletedStages] = useState<number[]>([]);
+  
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(100);
-  const [stage, setStage] = useState(1);
+  const [pushupCount, setPushupCount] = useState(0);
+  const [pushupTimeLeft, setPushupTimeLeft] = useState(30);
   
-  // Player state
+  // Pose detection state
+  const [isJogging, setIsJogging] = useState(false);
+  const [isJumping, setIsJumping] = useState(false);
+  const [isPushup, setIsPushup] = useState(false);
+  const [bodyDetected, setBodyDetected] = useState(false);
+  
+  // Game refs
   const playerYRef = useRef(GROUND_Y - PLAYER_SIZE);
   const playerVelocityRef = useRef(0);
   const isJumpingRef = useRef(false);
-  const isDuckingRef = useRef(false);
-  
-  // Pose detection state
-  const [isJumping, setIsJumping] = useState(false);
-  const [isDucking, setIsDucking] = useState(false);
-  const [bodyDetected, setBodyDetected] = useState(false);
-  
-  // Game state
-  const obstaclesRef = useRef<Obstacle[]>([]);
-  const speedRef = useRef(6);
+  const enemiesRef = useRef<Enemy[]>([]);
   const distanceRef = useRef(0);
-  const lastObstacleRef = useRef(0);
+  const lastEnemyRef = useRef(0);
+  const healthRef = useRef(100);
+  const scoreRef = useRef(0);
 
   // Speak function
   const speak = useCallback((text: string) => {
@@ -63,11 +105,28 @@ export default function GamePage() {
       if (synth) {
         synth.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.rate = 1.3;
+        u.rate = 1.2;
         synth.speak(u);
       }
     } catch (e) { /* ignore */ }
   }, [audioEnabled]);
+
+  // Load progress from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("neonrun-progress");
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setUnlockedStages(data.unlocked || [1]);
+        setCompletedStages(data.completed || []);
+      } catch (e) { /* ignore */ }
+    }
+  }, []);
+
+  // Save progress
+  const saveProgress = useCallback((unlocked: number[], completed: number[]) => {
+    localStorage.setItem("neonrun-progress", JSON.stringify({ unlocked, completed }));
+  }, []);
 
   // Initialize camera and pose detection
   useEffect(() => {
@@ -75,7 +134,6 @@ export default function GamePage() {
     
     async function init() {
       try {
-        // Get camera
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user", width: 320, height: 240 }
         });
@@ -91,11 +149,9 @@ export default function GamePage() {
           await videoRef.current.play();
         }
         
-        // Initialize TensorFlow
         await tf.setBackend("webgl");
         await tf.ready();
         
-        // Create detector
         const detector = await poseDetection.createDetector(
           poseDetection.SupportedModels.MoveNet,
           { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
@@ -107,7 +163,7 @@ export default function GamePage() {
         
       } catch (err) {
         if (mounted) {
-          setCameraError("Camera access needed. Open in new tab and allow camera.");
+          setCameraError("Camera needed. Open in new browser tab.");
         }
       }
     }
@@ -125,7 +181,9 @@ export default function GamePage() {
     if (!cameraReady) return;
     
     let running = true;
-    const standingShoulderY = { value: 0, calibrated: false, frames: 0 };
+    const calibration = { shoulderY: 0, hipY: 0, calibrated: false, frames: 0 };
+    const jogHistory: number[] = [];
+    const pushupState = { wasDown: false };
     
     async function detectPose() {
       if (!running || !detectorRef.current || !videoRef.current) return;
@@ -137,44 +195,77 @@ export default function GamePage() {
           const kps = poses[0].keypoints;
           setBodyDetected(true);
           
-          // Get key points
-          const getY = (name: string) => {
+          const getPoint = (name: string) => {
             const kp = kps.find(k => k.name === name);
-            return kp && (kp.score ?? 0) > 0.3 ? kp.y : null;
+            return kp && (kp.score ?? 0) > 0.3 ? { x: kp.x, y: kp.y } : null;
           };
           
-          const lShoulder = getY("left_shoulder");
-          const rShoulder = getY("right_shoulder");
-          const lHip = getY("left_hip");
-          const rHip = getY("right_hip");
-          const lWrist = getY("left_wrist");
-          const rWrist = getY("right_wrist");
+          const lShoulder = getPoint("left_shoulder");
+          const rShoulder = getPoint("right_shoulder");
+          const lHip = getPoint("left_hip");
+          const rHip = getPoint("right_hip");
+          const lWrist = getPoint("left_wrist");
+          const rWrist = getPoint("right_wrist");
+          const lElbow = getPoint("left_elbow");
+          const rElbow = getPoint("right_elbow");
           
-          const shoulderY = lShoulder && rShoulder ? (lShoulder + rShoulder) / 2 : lShoulder || rShoulder;
-          const hipY = lHip && rHip ? (lHip + rHip) / 2 : lHip || rHip;
-          const wristY = lWrist && rWrist ? Math.min(lWrist, rWrist) : lWrist || rWrist;
+          const shoulderY = lShoulder && rShoulder ? (lShoulder.y + rShoulder.y) / 2 : 
+                           lShoulder?.y || rShoulder?.y || null;
+          const hipY = lHip && rHip ? (lHip.y + rHip.y) / 2 : lHip?.y || rHip?.y || null;
+          const wristY = lWrist && rWrist ? Math.min(lWrist.y, rWrist.y) : lWrist?.y || rWrist?.y || null;
           
-          if (shoulderY !== null) {
-            // Calibrate standing position
-            if (!standingShoulderY.calibrated && standingShoulderY.frames < 30) {
-              standingShoulderY.frames++;
-              if (standingShoulderY.value === 0 || shoulderY < standingShoulderY.value) {
-                standingShoulderY.value = shoulderY;
+          if (shoulderY !== null && hipY !== null) {
+            // Calibration
+            if (!calibration.calibrated && calibration.frames < 20) {
+              calibration.frames++;
+              if (calibration.shoulderY === 0 || shoulderY < calibration.shoulderY) {
+                calibration.shoulderY = shoulderY;
+                calibration.hipY = hipY;
               }
-              if (standingShoulderY.frames >= 30) {
-                standingShoulderY.calibrated = true;
-              }
+              if (calibration.frames >= 20) calibration.calibrated = true;
             }
             
-            if (standingShoulderY.calibrated) {
-              // JUMP: Arms raised above shoulders
-              const jumping = wristY !== null && wristY < shoulderY - 40;
+            if (calibration.calibrated) {
+              // JOGGING: Track vertical oscillation
+              jogHistory.push(shoulderY);
+              if (jogHistory.length > 15) jogHistory.shift();
+              
+              if (jogHistory.length >= 10) {
+                let oscillation = 0;
+                for (let i = 1; i < jogHistory.length; i++) {
+                  oscillation += Math.abs(jogHistory[i] - jogHistory[i - 1]);
+                }
+                setIsJogging(oscillation > 25);
+              }
+              
+              // JUMPING: Arms raised high
+              const jumping = wristY !== null && wristY < shoulderY - 50;
               setIsJumping(jumping);
               
-              // DUCK: Shoulders dropped significantly (squatting)
-              const shoulderDrop = shoulderY - standingShoulderY.value;
-              const ducking = shoulderDrop > 50;
-              setIsDucking(ducking);
+              // PUSHUP: Detect arm bend with body low
+              const calcAngle = (p1: {x:number,y:number}, p2: {x:number,y:number}, p3: {x:number,y:number}) => {
+                const rad = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
+                let angle = Math.abs((rad * 180) / Math.PI);
+                return angle > 180 ? 360 - angle : angle;
+              };
+              
+              let elbowAngle = 180;
+              if (lShoulder && lElbow && lWrist) {
+                elbowAngle = calcAngle(lShoulder, lElbow, lWrist);
+              } else if (rShoulder && rElbow && rWrist) {
+                elbowAngle = calcAngle(rShoulder, rElbow, rWrist);
+              }
+              
+              const isDown = elbowAngle < 100 && shoulderY > calibration.shoulderY + 30;
+              const isUp = elbowAngle > 140;
+              
+              if (isDown && !pushupState.wasDown) {
+                pushupState.wasDown = true;
+              } else if (isUp && pushupState.wasDown) {
+                pushupState.wasDown = false;
+                // Signal pushup completed (will be handled by effect with cooldown)
+                setIsPushup(true);
+              }
             }
           }
         } else {
@@ -182,287 +273,387 @@ export default function GamePage() {
         }
       } catch (e) { /* ignore */ }
       
-      if (running) {
-        requestAnimationFrame(detectPose);
-      }
+      if (running) requestAnimationFrame(detectPose);
     }
     
     detectPose();
-    
     return () => { running = false; };
   }, [cameraReady]);
 
-  // Game loop
+  // Main game loop
   useEffect(() => {
-    if (!gameStarted || gameOver) return;
+    if (screen !== "playing") return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
+    const settings = DIFFICULTIES[difficulty];
+    const stageData = STAGES[selectedStage - 1];
     let running = true;
     
-    function gameLoop(timestamp: number) {
+    function createEnemy(): Enemy {
+      const types = stageData.enemyTypes;
+      const type = types[Math.floor(Math.random() * types.length)];
+      
+      const baseEnemy = {
+        x: GAME_WIDTH + 50,
+        width: 50,
+        height: 50,
+        color: "#ff4466",
+      };
+      
+      if (type === "walker") {
+        return {
+          ...baseEnemy,
+          y: GROUND_Y - 50,
+          speedX: settings.baseSpeed * 0.8 + Math.random() * 2,
+          speedY: 0,
+          type: "walker",
+          color: "#ff4466",
+        };
+      } else if (type === "flyer") {
+        return {
+          ...baseEnemy,
+          y: 150 + Math.random() * 100,
+          width: 45,
+          height: 35,
+          speedX: settings.baseSpeed * 0.6 + Math.random() * 1.5,
+          speedY: Math.sin(Math.random() * Math.PI * 2) * 2,
+          type: "flyer",
+          color: "#ff66aa",
+        };
+      } else {
+        return {
+          ...baseEnemy,
+          y: GROUND_Y - 60,
+          speedX: settings.baseSpeed * 0.5 + Math.random(),
+          speedY: -8,
+          type: "bouncer",
+          color: "#ff8844",
+        };
+      }
+    }
+    
+    function gameLoop() {
       if (!running || !ctx) return;
       
-      const delta = timestamp - lastFrameTimeRef.current;
-      lastFrameTimeRef.current = timestamp;
-      
-      // Update player based on pose
+      // Update player
       if (isJumping && !isJumpingRef.current && playerYRef.current >= GROUND_Y - PLAYER_SIZE - 5) {
-        playerVelocityRef.current = -18;
+        playerVelocityRef.current = -16;
         isJumpingRef.current = true;
       }
-      isDuckingRef.current = isDucking;
       
-      // Apply physics
-      playerVelocityRef.current += 0.8; // gravity
+      playerVelocityRef.current += 0.7;
       playerYRef.current += playerVelocityRef.current;
       
-      const groundLevel = isDuckingRef.current ? GROUND_Y - PLAYER_SIZE / 2 : GROUND_Y - PLAYER_SIZE;
-      if (playerYRef.current >= groundLevel) {
-        playerYRef.current = groundLevel;
+      if (playerYRef.current >= GROUND_Y - PLAYER_SIZE) {
+        playerYRef.current = GROUND_Y - PLAYER_SIZE;
         playerVelocityRef.current = 0;
         isJumpingRef.current = false;
       }
       
-      // Update game
-      distanceRef.current += speedRef.current;
-      const currentStage = Math.floor(distanceRef.current / 2000) + 1;
-      if (currentStage !== stage) {
-        setStage(currentStage);
-        speedRef.current = Math.min(14, 6 + currentStage * 0.8);
-        speak(`Stage ${currentStage}`);
+      // Score and spawn enemies only when jogging, but enemies always move
+      if (isJogging) {
+        distanceRef.current += settings.baseSpeed;
+        scoreRef.current += 1;
+        setScore(scoreRef.current);
+        
+        // Spawn enemies only when jogging
+        if (distanceRef.current - lastEnemyRef.current > settings.enemySpawnRate / 10) {
+          enemiesRef.current.push(createEnemy());
+          lastEnemyRef.current = distanceRef.current;
+        }
       }
       
-      // Generate obstacles
-      if (distanceRef.current - lastObstacleRef.current > 400 + Math.random() * 300) {
-        const type = Math.random() > 0.5 ? "jump" : "duck";
-        obstaclesRef.current.push({
-          x: GAME_WIDTH,
-          type,
-          passed: false
-        });
-        lastObstacleRef.current = distanceRef.current;
-      }
+      // Update enemies - always move them to prevent freezing in front of player
+      const playerX = 100;
+      let wasHit = false;
       
-      // Update obstacles and check collisions
-      let hit = false;
-      obstaclesRef.current = obstaclesRef.current.filter(obs => {
-        obs.x -= speedRef.current;
+      enemiesRef.current = enemiesRef.current.filter(enemy => {
+        // Enemies always move (at reduced speed when player stopped)
+        const moveSpeed = isJogging ? enemy.speedX : enemy.speedX * 0.5;
+        enemy.x -= moveSpeed;
         
-        // Check collision
-        const playerX = 80;
-        const playerHeight = isDuckingRef.current ? PLAYER_SIZE / 2 : PLAYER_SIZE;
-        const playerTop = playerYRef.current;
-        
-        const obsTop = obs.type === "jump" ? GROUND_Y - OBSTACLE_HEIGHT : GROUND_Y - OBSTACLE_HEIGHT * 2;
-        const obsBottom = obs.type === "jump" ? GROUND_Y : GROUND_Y - OBSTACLE_HEIGHT;
-        
-        const collisionX = playerX + PLAYER_SIZE - 10 > obs.x && playerX + 10 < obs.x + OBSTACLE_WIDTH;
-        const collisionY = playerTop + playerHeight > obsTop && playerTop < obsBottom;
-        
-        if (collisionX && collisionY && !obs.passed) {
-          hit = true;
-          obs.passed = true;
+        // Special movement
+        if (enemy.type === "flyer") {
+          enemy.y += Math.sin(Date.now() / 200 + enemy.x) * 1.5;
+        } else if (enemy.type === "bouncer") {
+          enemy.speedY += 0.5;
+          enemy.y += enemy.speedY;
+          if (enemy.y >= GROUND_Y - enemy.height) {
+            enemy.y = GROUND_Y - enemy.height;
+            enemy.speedY = -10 - Math.random() * 4;
+          }
         }
         
-        // Score for passing
-        if (obs.x + OBSTACLE_WIDTH < playerX && !obs.passed) {
-          obs.passed = true;
-          setScore(s => s + 10 + currentStage * 5);
+        // Collision check
+        const px = playerX, py = playerYRef.current, pw = PLAYER_SIZE, ph = PLAYER_SIZE;
+        const ex = enemy.x, ey = enemy.y, ew = enemy.width, eh = enemy.height;
+        
+        if (px + pw - 15 > ex && px + 15 < ex + ew && py + ph - 10 > ey && py + 10 < ey + eh) {
+          wasHit = true;
+          return false;
         }
         
-        return obs.x > -OBSTACLE_WIDTH;
+        return enemy.x > -enemy.width;
       });
       
-      if (hit) {
-        setHealth(h => {
-          const newHealth = h - (15 + currentStage * 2);
-          if (newHealth <= 0) {
-            setGameOver(true);
-            speak("Game over");
-            return 0;
-          }
-          return newHealth;
-        });
+      if (wasHit) {
+        healthRef.current = Math.max(0, healthRef.current - settings.damage);
+        setHealth(healthRef.current);
+        
+        if (healthRef.current <= 0) {
+          running = false;
+          setScreen("pushup-challenge");
+          setPushupCount(0);
+          setPushupTimeLeft(30);
+          speak("Do 10 pushups to continue!");
+          return;
+        }
       }
       
-      // Draw
-      render(ctx);
-      
-      if (running && !gameOver) {
-        gameLoopRef.current = requestAnimationFrame(gameLoop);
+      // Check stage complete
+      if (scoreRef.current >= stageData.targetScore) {
+        running = false;
+        
+        // Compute final unlocked and completed arrays once
+        const nextStage = selectedStage + 1;
+        const newUnlocked = nextStage <= STAGES.length && !unlockedStages.includes(nextStage) 
+          ? [...unlockedStages, nextStage] 
+          : unlockedStages;
+        const newCompleted = !completedStages.includes(selectedStage)
+          ? [...completedStages, selectedStage]
+          : completedStages;
+        
+        // Update state and save once
+        setUnlockedStages(newUnlocked);
+        setCompletedStages(newCompleted);
+        saveProgress(newUnlocked, newCompleted);
+        
+        setScreen("stage-complete");
+        speak("Stage complete!");
+        return;
       }
+      
+      // Render
+      render(ctx, stageData);
+      
+      if (running) gameLoopRef.current = requestAnimationFrame(gameLoop);
     }
     
-    function render(ctx: CanvasRenderingContext2D) {
-      // Sky gradient
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-      skyGrad.addColorStop(0, "#1a0a2e");
-      skyGrad.addColorStop(0.5, "#2d1b4e");
-      skyGrad.addColorStop(1, "#4a2c6e");
-      ctx.fillStyle = skyGrad;
+    function render(ctx: CanvasRenderingContext2D, stage: StageData) {
+      // Background
+      const grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+      grad.addColorStop(0, stage.bgColor1);
+      grad.addColorStop(1, stage.bgColor2);
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       
       // Stars
       ctx.fillStyle = "#fff";
-      for (let i = 0; i < 30; i++) {
-        const sx = (i * 97 + Math.floor(distanceRef.current * 0.1)) % GAME_WIDTH;
+      for (let i = 0; i < 25; i++) {
+        const sx = (i * 97 + Math.floor(distanceRef.current * 0.3)) % GAME_WIDTH;
         const sy = (i * 43) % 150 + 20;
-        ctx.globalAlpha = 0.3 + Math.sin(Date.now() / 300 + i) * 0.3;
+        ctx.globalAlpha = 0.3 + Math.sin(Date.now() / 400 + i) * 0.3;
         ctx.beginPath();
-        ctx.arc(sx, sy, 1, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
       
-      // Moon
-      ctx.fillStyle = "#f0e68c";
-      ctx.beginPath();
-      ctx.arc(650, 80, 40, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#4a2c6e";
-      ctx.beginPath();
-      ctx.arc(670, 70, 35, 0, Math.PI * 2);
-      ctx.fill();
-      
       // Ground
-      const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, GAME_HEIGHT);
-      groundGrad.addColorStop(0, "#3d2b5e");
-      groundGrad.addColorStop(1, "#2a1e40");
-      ctx.fillStyle = groundGrad;
+      ctx.fillStyle = "#3d2b5e";
       ctx.fillRect(0, GROUND_Y, GAME_WIDTH, GAME_HEIGHT - GROUND_Y);
       
       // Ground lines
       ctx.strokeStyle = "#5a4080";
       ctx.lineWidth = 1;
-      for (let i = 0; i < GAME_WIDTH + 50; i += 50) {
-        const x = (i - (distanceRef.current * 2) % 50);
+      for (let i = 0; i < GAME_WIDTH + 60; i += 60) {
+        const x = i - (distanceRef.current * 3) % 60;
         ctx.beginPath();
         ctx.moveTo(x, GROUND_Y);
-        ctx.lineTo(x + 25, GAME_HEIGHT);
+        ctx.lineTo(x + 30, GAME_HEIGHT);
         ctx.stroke();
       }
       
-      // Draw obstacles
-      obstaclesRef.current.forEach(obs => {
-        if (obs.type === "jump") {
-          // Spiky obstacle - must jump over
-          ctx.fillStyle = "#ff4466";
+      // Draw enemies
+      enemiesRef.current.forEach(enemy => {
+        ctx.fillStyle = enemy.color;
+        ctx.shadowColor = enemy.color;
+        ctx.shadowBlur = 10;
+        
+        if (enemy.type === "walker") {
+          // Spiky enemy
           ctx.beginPath();
-          ctx.moveTo(obs.x, GROUND_Y);
-          ctx.lineTo(obs.x + OBSTACLE_WIDTH / 2, GROUND_Y - OBSTACLE_HEIGHT);
-          ctx.lineTo(obs.x + OBSTACLE_WIDTH, GROUND_Y);
+          ctx.moveTo(enemy.x + enemy.width / 2, enemy.y);
+          ctx.lineTo(enemy.x + enemy.width, enemy.y + enemy.height);
+          ctx.lineTo(enemy.x, enemy.y + enemy.height);
           ctx.closePath();
           ctx.fill();
           
-          ctx.fillStyle = "#cc3355";
+          // Eyes
+          ctx.fillStyle = "#fff";
           ctx.beginPath();
-          ctx.moveTo(obs.x + 10, GROUND_Y);
-          ctx.lineTo(obs.x + OBSTACLE_WIDTH / 2, GROUND_Y - OBSTACLE_HEIGHT + 15);
-          ctx.lineTo(obs.x + OBSTACLE_WIDTH - 10, GROUND_Y);
-          ctx.closePath();
+          ctx.arc(enemy.x + enemy.width / 3, enemy.y + enemy.height / 2, 5, 0, Math.PI * 2);
+          ctx.arc(enemy.x + (enemy.width * 2) / 3, enemy.y + enemy.height / 2, 5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (enemy.type === "flyer") {
+          // Flying bat-like enemy
+          ctx.beginPath();
+          ctx.ellipse(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.width / 2, enemy.height / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Wings
+          const wingFlap = Math.sin(Date.now() / 50) * 10;
+          ctx.beginPath();
+          ctx.moveTo(enemy.x, enemy.y + enemy.height / 2);
+          ctx.lineTo(enemy.x - 15, enemy.y + wingFlap);
+          ctx.lineTo(enemy.x + 10, enemy.y + enemy.height / 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(enemy.x + enemy.width, enemy.y + enemy.height / 2);
+          ctx.lineTo(enemy.x + enemy.width + 15, enemy.y + wingFlap);
+          ctx.lineTo(enemy.x + enemy.width - 10, enemy.y + enemy.height / 2);
           ctx.fill();
         } else {
-          // Floating obstacle - must duck under
-          const barY = GROUND_Y - OBSTACLE_HEIGHT * 1.5;
-          ctx.fillStyle = "#44aaff";
-          ctx.fillRect(obs.x, barY, OBSTACLE_WIDTH, OBSTACLE_HEIGHT * 0.7);
+          // Bouncing ball enemy
+          ctx.beginPath();
+          ctx.arc(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemy.width / 2, 0, Math.PI * 2);
+          ctx.fill();
           
-          ctx.fillStyle = "#2288dd";
-          ctx.fillRect(obs.x + 5, barY + 5, OBSTACLE_WIDTH - 10, OBSTACLE_HEIGHT * 0.7 - 10);
-          
-          // Glow effect
-          ctx.shadowColor = "#44aaff";
-          ctx.shadowBlur = 10;
-          ctx.fillStyle = "#66ccff";
-          ctx.fillRect(obs.x + 10, barY + 10, OBSTACLE_WIDTH - 20, 5);
-          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#fff";
+          ctx.beginPath();
+          ctx.arc(enemy.x + enemy.width / 3, enemy.y + enemy.height / 3, 6, 0, Math.PI * 2);
+          ctx.arc(enemy.x + (enemy.width * 2) / 3, enemy.y + enemy.height / 3, 6, 0, Math.PI * 2);
+          ctx.fill();
         }
+        
+        ctx.shadowBlur = 0;
       });
       
       // Draw player
-      const px = 80;
+      const px = 100;
       const py = playerYRef.current;
-      const ph = isDuckingRef.current ? PLAYER_SIZE / 2 : PLAYER_SIZE;
       
-      // Body glow
       ctx.shadowColor = "#00ff88";
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 20;
       ctx.fillStyle = "#00cc66";
-      ctx.fillRect(px, py, PLAYER_SIZE, ph);
+      ctx.fillRect(px, py, PLAYER_SIZE, PLAYER_SIZE);
       ctx.shadowBlur = 0;
       
-      // Body
       ctx.fillStyle = "#00ff88";
-      ctx.fillRect(px + 5, py + 5, PLAYER_SIZE - 10, ph - 10);
+      ctx.fillRect(px + 5, py + 5, PLAYER_SIZE - 10, PLAYER_SIZE - 10);
       
       // Face
       ctx.fillStyle = "#fff";
-      ctx.fillRect(px + 15, py + 10, 8, 8);
-      ctx.fillRect(px + 35, py + 10, 8, 8);
-      
-      // Mouth
+      ctx.fillRect(px + 15, py + 15, 8, 8);
+      ctx.fillRect(px + 35, py + 15, 8, 8);
       ctx.fillStyle = "#00aa55";
-      ctx.fillRect(px + 15, py + 25, 28, 5);
+      ctx.fillRect(px + 15, py + 35, 28, 5);
       
-      // Draw HUD
+      // Running animation
+      if (isJogging && !isJumpingRef.current) {
+        const legOffset = Math.sin(distanceRef.current / 15) * 10;
+        ctx.fillStyle = "#00aa55";
+        ctx.fillRect(px + 10, py + PLAYER_SIZE, 15, 12 + legOffset);
+        ctx.fillRect(px + PLAYER_SIZE - 25, py + PLAYER_SIZE, 15, 12 - legOffset);
+      }
+      
+      // HUD
       ctx.fillStyle = "#fff";
-      ctx.font = "bold 24px Arial";
-      ctx.fillText(`Score: ${score}`, 20, 35);
-      ctx.font = "18px Arial";
-      ctx.fillText(`Stage ${stage}`, 20, 60);
+      ctx.font = "bold 22px Arial";
+      ctx.fillText(`Score: ${scoreRef.current} / ${stage.targetScore}`, 20, 35);
+      ctx.font = "16px Arial";
+      ctx.fillText(`Stage ${selectedStage}: ${stage.name}`, 20, 55);
       
       // Health bar
-      const hbWidth = 200;
-      const hbHeight = 20;
-      const hbX = GAME_WIDTH - hbWidth - 20;
-      
-      ctx.fillStyle = "#333";
-      ctx.fillRect(hbX, 15, hbWidth, hbHeight);
-      
-      const healthPct = health / 100;
-      ctx.fillStyle = healthPct > 0.5 ? "#00ff88" : healthPct > 0.25 ? "#ffaa00" : "#ff4466";
-      ctx.fillRect(hbX, 15, hbWidth * healthPct, hbHeight);
-      
+      const hbW = 180, hbH = 18, hbX = GAME_WIDTH - hbW - 20;
+      ctx.fillStyle = "#222";
+      ctx.fillRect(hbX, 15, hbW, hbH);
+      const hPct = healthRef.current / 100;
+      ctx.fillStyle = hPct > 0.5 ? "#00ff88" : hPct > 0.25 ? "#ffaa00" : "#ff4466";
+      ctx.fillRect(hbX, 15, hbW * hPct, hbH);
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
-      ctx.strokeRect(hbX, 15, hbWidth, hbHeight);
+      ctx.strokeRect(hbX, 15, hbW, hbH);
       
-      ctx.fillStyle = "#fff";
+      // Jogging indicator
+      ctx.fillStyle = isJogging ? "#00ff88" : "#666";
       ctx.font = "bold 14px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(`${health}%`, hbX + hbWidth / 2, 30);
-      ctx.textAlign = "left";
-      
-      // Running indicator
-      if (!isJumpingRef.current && !isDuckingRef.current) {
-        const legOffset = Math.sin(distanceRef.current / 20) * 8;
-        ctx.fillStyle = "#00aa55";
-        ctx.fillRect(px + 10, py + ph, 12, 10 + legOffset);
-        ctx.fillRect(px + PLAYER_SIZE - 22, py + ph, 12, 10 - legOffset);
-      }
+      ctx.fillText(isJogging ? "RUNNING" : "JOG TO MOVE", GAME_WIDTH - 200, 55);
     }
     
-    lastFrameTimeRef.current = performance.now();
     gameLoopRef.current = requestAnimationFrame(gameLoop);
     
     return () => {
       running = false;
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
     };
-  }, [gameStarted, gameOver, isJumping, isDucking, stage, speak, score, health]);
+  }, [screen, difficulty, selectedStage, isJogging, isJumping, speak, unlockedStages, completedStages, saveProgress]);
 
-  // Draw initial/game over screen
+  // Pushup challenge timer and counter
+  useEffect(() => {
+    if (screen !== "pushup-challenge") return;
+    
+    const timer = setInterval(() => {
+      setPushupTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(timer);
+          setScreen("game-over");
+          speak("Game over!");
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [screen, speak]);
+
+  // Count pushups during challenge with cooldown
+  const lastPushupTimeRef = useRef(0);
+  
+  useEffect(() => {
+    if (screen !== "pushup-challenge" || !isPushup) return;
+    
+    // Cooldown: at least 800ms between pushups
+    const now = Date.now();
+    if (now - lastPushupTimeRef.current < 800) {
+      setIsPushup(false);
+      return;
+    }
+    
+    lastPushupTimeRef.current = now;
+    setIsPushup(false); // Reset immediately after counting
+    
+    setPushupCount(c => {
+      const newCount = c + 1;
+      speak(String(newCount));
+      
+      if (newCount >= 10) {
+        // Revival!
+        setTimeout(() => {
+          healthRef.current = 50;
+          setHealth(50);
+          setScreen("playing");
+          speak("Continue!");
+        }, 500);
+      }
+      
+      return newCount;
+    });
+  }, [isPushup, screen, speak]);
+
+  // Render non-playing screens
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    if (!gameStarted || gameOver) {
+    if (screen === "menu" || screen === "stage-select" || screen === "pushup-challenge" || screen === "game-over" || screen === "stage-complete") {
       // Background
       const grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
       grad.addColorStop(0, "#1a0a2e");
@@ -470,71 +661,100 @@ export default function GamePage() {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       
-      ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
       
-      if (gameOver) {
-        ctx.font = "bold 48px Arial";
+      if (screen === "menu") {
+        ctx.font = "bold 50px Arial";
+        ctx.fillStyle = "#00ff88";
+        ctx.fillText("NEON RUN", GAME_WIDTH / 2, 100);
+        
+        ctx.font = "22px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Select Difficulty:", GAME_WIDTH / 2, 180);
+        
+        // Difficulty buttons drawn via DOM
+        
+        ctx.font = "16px Arial";
+        ctx.fillStyle = "#aaa";
+        ctx.fillText("Jog in place to run, raise arms to jump", GAME_WIDTH / 2, GAME_HEIGHT - 40);
+        
+      } else if (screen === "stage-select") {
+        ctx.font = "bold 36px Arial";
+        ctx.fillStyle = "#00ff88";
+        ctx.fillText("SELECT STAGE", GAME_WIDTH / 2, 60);
+        
+        ctx.font = "18px Arial";
+        ctx.fillStyle = "#aaa";
+        ctx.fillText(`Difficulty: ${DIFFICULTIES[difficulty].name}`, GAME_WIDTH / 2, 95);
+        
+      } else if (screen === "pushup-challenge") {
+        ctx.font = "bold 40px Arial";
+        ctx.fillStyle = "#ffaa00";
+        ctx.fillText("PUSHUP CHALLENGE!", GAME_WIDTH / 2, 100);
+        
+        ctx.font = "bold 80px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.fillText(`${pushupCount}/10`, GAME_WIDTH / 2, 220);
+        
+        ctx.font = "bold 30px Arial";
+        ctx.fillStyle = pushupTimeLeft <= 10 ? "#ff4466" : "#fff";
+        ctx.fillText(`Time: ${pushupTimeLeft}s`, GAME_WIDTH / 2, 300);
+        
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "#aaa";
+        ctx.fillText("Do 10 pushups to continue!", GAME_WIDTH / 2, 370);
+        
+      } else if (screen === "game-over") {
+        ctx.font = "bold 50px Arial";
         ctx.fillStyle = "#ff4466";
-        ctx.fillText("GAME OVER", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40);
+        ctx.fillText("GAME OVER", GAME_WIDTH / 2, 150);
         
         ctx.font = "28px Arial";
         ctx.fillStyle = "#fff";
-        ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10);
-        ctx.fillText(`Stage Reached: ${stage}`, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 45);
-      } else {
-        ctx.font = "bold 42px Arial";
+        ctx.fillText(`Final Score: ${score}`, GAME_WIDTH / 2, 220);
+        
+      } else if (screen === "stage-complete") {
+        ctx.font = "bold 45px Arial";
         ctx.fillStyle = "#00ff88";
-        ctx.fillText("NEON RUN", GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60);
+        ctx.fillText("STAGE COMPLETE!", GAME_WIDTH / 2, 120);
         
-        ctx.font = "20px Arial";
+        ctx.font = "28px Arial";
         ctx.fillStyle = "#fff";
-        ctx.fillText("Raise arms to JUMP over red spikes", GAME_WIDTH / 2, GAME_HEIGHT / 2);
-        ctx.fillText("Squat down to DUCK under blue bars", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30);
+        ctx.fillText(`Score: ${score}`, GAME_WIDTH / 2, 180);
         
-        if (cameraReady && bodyDetected) {
-          ctx.fillStyle = "#00ff88";
-          ctx.fillText("Body detected! Click START to begin", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80);
-        } else if (cameraReady) {
-          ctx.fillStyle = "#ffaa00";
-          ctx.fillText("Stand in front of camera", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80);
-        } else if (cameraError) {
-          ctx.fillStyle = "#ff4466";
-          ctx.fillText(cameraError, GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80);
+        if (selectedStage < STAGES.length) {
+          ctx.font = "20px Arial";
+          ctx.fillStyle = "#aaa";
+          ctx.fillText(`Stage ${selectedStage + 1} Unlocked!`, GAME_WIDTH / 2, 230);
         } else {
+          ctx.font = "24px Arial";
           ctx.fillStyle = "#ffaa00";
-          ctx.fillText("Loading camera...", GAME_WIDTH / 2, GAME_HEIGHT / 2 + 80);
+          ctx.fillText("All Stages Complete! You Win!", GAME_WIDTH / 2, 230);
         }
       }
       
       ctx.textAlign = "left";
     }
-  }, [gameStarted, gameOver, cameraReady, cameraError, bodyDetected, score, stage]);
+  }, [screen, difficulty, score, pushupCount, pushupTimeLeft, selectedStage]);
 
-  const startGame = () => {
-    if (!bodyDetected) return;
+  const startGame = (stageId: number) => {
+    if (!bodyDetected || !unlockedStages.includes(stageId)) return;
     
-    // Reset game state
+    setSelectedStage(stageId);
     setScore(0);
     setHealth(100);
-    setStage(1);
-    setGameOver(false);
-    setGameStarted(true);
+    scoreRef.current = 0;
+    healthRef.current = 100;
     
     playerYRef.current = GROUND_Y - PLAYER_SIZE;
     playerVelocityRef.current = 0;
     isJumpingRef.current = false;
-    isDuckingRef.current = false;
-    obstaclesRef.current = [];
-    speedRef.current = 6;
+    enemiesRef.current = [];
     distanceRef.current = 0;
-    lastObstacleRef.current = 0;
+    lastEnemyRef.current = 0;
     
-    speak("Stage 1. Go!");
-  };
-
-  const restartGame = () => {
-    startGame();
+    setScreen("playing");
+    speak(`Stage ${stageId}. Go!`);
   };
 
   return (
@@ -572,31 +792,101 @@ export default function GamePage() {
                 data-testid="game-canvas"
               />
               
-              <div className="flex gap-3 mt-4 justify-center">
-                {!gameStarted && (
+              {/* Menu buttons */}
+              {screen === "menu" && (
+                <div className="flex flex-col items-center gap-3 mt-4">
+                  <div className="flex gap-3">
+                    {(["easy", "medium", "hard"] as Difficulty[]).map(d => (
+                      <Button
+                        key={d}
+                        onClick={() => setDifficulty(d)}
+                        variant={difficulty === d ? "default" : "outline"}
+                        style={difficulty === d ? { backgroundColor: DIFFICULTIES[d].color, color: "#000" } : {}}
+                        data-testid={`button-difficulty-${d}`}
+                      >
+                        {DIFFICULTIES[d].name}
+                      </Button>
+                    ))}
+                  </div>
                   <Button
-                    onClick={startGame}
-                    disabled={!bodyDetected}
+                    onClick={() => setScreen("stage-select")}
                     size="lg"
-                    className="bg-green-600 hover:bg-green-700"
-                    data-testid="button-start-game"
+                    disabled={!cameraReady}
+                    data-testid="button-select-stage"
                   >
-                    <Play className="w-5 h-5 mr-2" />
-                    Start Game
+                    Select Stage
                   </Button>
-                )}
-                {gameOver && (
-                  <Button
-                    onClick={restartGame}
-                    size="lg"
-                    className="bg-purple-600 hover:bg-purple-700"
-                    data-testid="button-restart-game"
-                  >
-                    <RotateCcw className="w-5 h-5 mr-2" />
-                    Play Again
+                </div>
+              )}
+              
+              {/* Stage selection */}
+              {screen === "stage-select" && (
+                <div className="mt-4">
+                  <div className="grid grid-cols-5 gap-2 mb-4">
+                    {STAGES.map(stage => {
+                      const isUnlocked = unlockedStages.includes(stage.id);
+                      const isCompleted = completedStages.includes(stage.id);
+                      
+                      return (
+                        <Button
+                          key={stage.id}
+                          onClick={() => isUnlocked && startGame(stage.id)}
+                          disabled={!isUnlocked || !bodyDetected}
+                          variant="outline"
+                          className="h-20 flex flex-col relative"
+                          style={isCompleted ? { borderColor: "#00ff88" } : {}}
+                          data-testid={`button-stage-${stage.id}`}
+                        >
+                          {!isUnlocked && <Lock className="w-5 h-5 absolute top-1 right-1 text-gray-500" />}
+                          {isCompleted && <CheckCircle className="w-5 h-5 absolute top-1 right-1 text-green-500" />}
+                          <span className="font-bold text-lg">{stage.id}</span>
+                          <span className="text-xs">{stage.name}</span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-center gap-3">
+                    <Button variant="ghost" onClick={() => setScreen("menu")} data-testid="button-back-menu">
+                      Back to Menu
+                    </Button>
+                  </div>
+                  {!bodyDetected && cameraReady && (
+                    <p className="text-center text-yellow-500 mt-2">Stand in front of camera to start</p>
+                  )}
+                </div>
+              )}
+              
+              {/* Game over buttons */}
+              {screen === "game-over" && (
+                <div className="flex justify-center gap-3 mt-4">
+                  <Button onClick={() => startGame(selectedStage)} disabled={!bodyDetected} data-testid="button-retry">
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Retry Stage
                   </Button>
-                )}
-              </div>
+                  <Button variant="outline" onClick={() => setScreen("stage-select")} data-testid="button-stage-select">
+                    Stage Select
+                  </Button>
+                </div>
+              )}
+              
+              {/* Stage complete buttons */}
+              {screen === "stage-complete" && (
+                <div className="flex justify-center gap-3 mt-4">
+                  {selectedStage < STAGES.length && (
+                    <Button
+                      onClick={() => startGame(selectedStage + 1)}
+                      disabled={!bodyDetected}
+                      data-testid="button-next-stage"
+                    >
+                      <Trophy className="w-4 h-4 mr-2" />
+                      Next Stage
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setScreen("stage-select")} data-testid="button-stage-select-2">
+                    Stage Select
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
 
@@ -614,7 +904,7 @@ export default function GamePage() {
                 />
                 {!cameraReady && !cameraError && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <p className="text-white text-sm">Loading camera...</p>
+                    <p className="text-white text-sm">Loading...</p>
                   </div>
                 )}
                 {cameraError && (
@@ -623,25 +913,32 @@ export default function GamePage() {
                   </div>
                 )}
                 {cameraReady && (
-                  <div className={`absolute top-2 left-2 px-2 py-1 rounded text-xs font-bold ${
-                    bodyDetected ? "bg-green-500" : "bg-red-500"
-                  }`}>
+                  <div 
+                    className={`absolute top-2 left-2 px-2 py-1 rounded text-xs font-bold ${
+                      bodyDetected ? "bg-green-500" : "bg-red-500"
+                    }`}
+                    data-testid="status-body-detection"
+                  >
                     {bodyDetected ? "Ready" : "Get in Frame"}
                   </div>
                 )}
               </div>
             </Card>
 
-            <Card className="p-4">
+            <Card className="p-4" data-testid="card-controls">
               <h3 className="font-semibold mb-3">Controls</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${isJumping ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Jump (raise both arms high)</span>
+                  <div className={`w-3 h-3 rounded-full ${isJogging ? "bg-green-500" : "bg-muted"}`} data-testid="indicator-jogging" />
+                  <span>Run (jog in place)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${isDucking ? "bg-green-500" : "bg-muted"}`} />
-                  <span>Duck (squat down low)</span>
+                  <div className={`w-3 h-3 rounded-full ${isJumping ? "bg-green-500" : "bg-muted"}`} data-testid="indicator-jumping" />
+                  <span>Jump (raise arms high)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${isPushup ? "bg-green-500" : "bg-muted"}`} data-testid="indicator-pushup" />
+                  <span>Pushup (for revival)</span>
                 </div>
               </div>
             </Card>
@@ -649,11 +946,11 @@ export default function GamePage() {
             <Card className="p-4">
               <h3 className="font-semibold mb-3">How to Play</h3>
               <ul className="text-sm space-y-1 text-muted-foreground">
-                <li>Game scrolls automatically</li>
-                <li>Raise arms to jump over red spikes</li>
-                <li>Squat to duck under blue bars</li>
-                <li>Difficulty increases each stage</li>
-                <li>Survive as long as possible!</li>
+                <li>Jog in place to move forward</li>
+                <li>Raise arms to jump over enemies</li>
+                <li>Reach target score to clear stage</li>
+                <li>If health depletes: 10 pushups = revive!</li>
+                <li>Complete stages to unlock next ones</li>
               </ul>
             </Card>
           </div>
