@@ -3,15 +3,15 @@ import {
   entries,
   workoutSessions,
   gameSessions,
-  specialSessions,
+  boxingSessions,
   type CreateEntryRequest,
   type EntryResponse,
   type CreateWorkoutSessionRequest,
   type WorkoutSessionResponse,
   type CreateGameSessionRequest,
   type GameSessionResponse,
-  type CreateSpecialSessionRequest,
-  type SpecialSessionResponse
+  type CreateBoxingSessionRequest,
+  type BoxingSessionResponse
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -31,10 +31,10 @@ export interface IStorage {
   createGameSession(session: CreateGameSessionRequest): Promise<GameSessionResponse>;
   deleteGameSession(id: number): Promise<void>;
   
-  // Special session methods
-  getSpecialSessions(): Promise<SpecialSessionResponse[]>;
-  createSpecialSession(session: CreateSpecialSessionRequest): Promise<SpecialSessionResponse>;
-  deleteSpecialSession(id: number): Promise<void>;
+  // Boxing session methods
+  getBoxingSessions(): Promise<BoxingSessionResponse[]>;
+  createBoxingSession(session: CreateBoxingSessionRequest): Promise<BoxingSessionResponse>;
+  deleteBoxingSession(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -80,18 +80,18 @@ export class DatabaseStorage implements IStorage {
     await db.delete(gameSessions).where(eq(gameSessions.id, id));
   }
 
-  // Special session methods
-  async getSpecialSessions(): Promise<SpecialSessionResponse[]> {
-    return await db.select().from(specialSessions).orderBy(desc(specialSessions.date));
+  // Boxing session methods
+  async getBoxingSessions(): Promise<BoxingSessionResponse[]> {
+    return await db.select().from(boxingSessions).orderBy(desc(boxingSessions.date));
   }
 
-  async createSpecialSession(session: CreateSpecialSessionRequest): Promise<SpecialSessionResponse> {
-    const [created] = await db.insert(specialSessions).values(session).returning();
+  async createBoxingSession(session: CreateBoxingSessionRequest): Promise<BoxingSessionResponse> {
+    const [created] = await db.insert(boxingSessions).values(session).returning();
     return created;
   }
 
-  async deleteSpecialSession(id: number): Promise<void> {
-    await db.delete(specialSessions).where(eq(specialSessions.id, id));
+  async deleteBoxingSession(id: number): Promise<void> {
+    await db.delete(boxingSessions).where(eq(boxingSessions.id, id));
   }
 }
 

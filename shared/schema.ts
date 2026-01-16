@@ -13,14 +13,20 @@ export const entries = pgTable("entries", {
   date: timestamp("date").defaultNow().notNull(),
 });
 
-// Special mode sessions (situp ball game history)
-export const specialSessions = pgTable("special_sessions", {
+// Boxing mode sessions (shadow boxing trainer history)
+export const boxingSessions = pgTable("boxing_sessions", {
   id: serial("id").primaryKey(),
-  level: integer("level").notNull(),
-  ballsHit: integer("balls_hit").notNull(),
-  ballsMissed: integer("balls_missed").notNull(),
-  targetHits: integer("target_hits").notNull(),
-  completed: integer("completed").notNull(), // 1 = passed, 0 = failed
+  difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
+  round: integer("round").notNull(),
+  totalRounds: integer("total_rounds").notNull(),
+  score: integer("score").notNull(),
+  punchesLanded: integer("punches_landed").notNull(),
+  punchesMissed: integer("punches_missed").notNull(),
+  dodgesSuccessful: integer("dodges_successful").notNull(),
+  dodgesMissed: integer("dodges_missed").notNull(),
+  blocksSuccessful: integer("blocks_successful").notNull(),
+  blocksMissed: integer("blocks_missed").notNull(),
+  completed: integer("completed").notNull(), // 1 = completed all rounds, 0 = quit early
   timePlayed: integer("time_played").notNull(), // in seconds
   date: timestamp("date").defaultNow().notNull(),
 });
@@ -69,7 +75,7 @@ export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
   date: true,
 });
 
-export const insertSpecialSessionSchema = createInsertSchema(specialSessions).omit({
+export const insertBoxingSessionSchema = createInsertSchema(boxingSessions).omit({
   id: true,
   date: true,
 });
@@ -98,12 +104,12 @@ export type CreateGameSessionRequest = InsertGameSession;
 export type GameSessionResponse = GameSession;
 export type GameSessionsListResponse = GameSession[];
 
-// Special session types
-export type SpecialSession = typeof specialSessions.$inferSelect;
-export type InsertSpecialSession = z.infer<typeof insertSpecialSessionSchema>;
-export type CreateSpecialSessionRequest = InsertSpecialSession;
-export type SpecialSessionResponse = SpecialSession;
-export type SpecialSessionsListResponse = SpecialSession[];
+// Boxing session types
+export type BoxingSession = typeof boxingSessions.$inferSelect;
+export type InsertBoxingSession = z.infer<typeof insertBoxingSessionSchema>;
+export type CreateBoxingSessionRequest = InsertBoxingSession;
+export type BoxingSessionResponse = BoxingSession;
+export type BoxingSessionsListResponse = BoxingSession[];
 
 // Exercise and difficulty types
 export type ExerciseType = "pushups" | "squats";

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions, insertGameSessionSchema, gameSessions, insertSpecialSessionSchema, specialSessions } from './schema';
+import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions, insertGameSessionSchema, gameSessions, insertBoxingSessionSchema, boxingSessions } from './schema';
 
 // ============================================
 // SHARED ERROR SCHEMAS
@@ -99,26 +99,26 @@ export const api = {
       },
     },
   },
-  specialSessions: {
+  boxingSessions: {
     list: {
       method: 'GET' as const,
-      path: '/api/special-sessions',
+      path: '/api/boxing-sessions',
       responses: {
-        200: z.array(z.custom<typeof specialSessions.$inferSelect>()),
+        200: z.array(z.custom<typeof boxingSessions.$inferSelect>()),
       },
     },
     create: {
       method: 'POST' as const,
-      path: '/api/special-sessions',
-      input: insertSpecialSessionSchema,
+      path: '/api/boxing-sessions',
+      input: insertBoxingSessionSchema,
       responses: {
-        201: z.custom<typeof specialSessions.$inferSelect>(),
+        201: z.custom<typeof boxingSessions.$inferSelect>(),
         400: errorSchemas.validation,
       },
     },
     delete: {
       method: 'DELETE' as const,
-      path: '/api/special-sessions/:id',
+      path: '/api/boxing-sessions/:id',
       responses: {
         204: z.void(),
         404: errorSchemas.notFound,
@@ -157,6 +157,6 @@ export type GameSessionInput = z.infer<typeof api.gameSessions.create.input>;
 export type GameSessionResponse = z.infer<typeof api.gameSessions.create.responses[201]>;
 export type GameSessionsListResponse = z.infer<typeof api.gameSessions.list.responses[200]>;
 
-export type SpecialSessionInput = z.infer<typeof api.specialSessions.create.input>;
-export type SpecialSessionResponse = z.infer<typeof api.specialSessions.create.responses[201]>;
-export type SpecialSessionsListResponse = z.infer<typeof api.specialSessions.list.responses[200]>;
+export type BoxingSessionInput = z.infer<typeof api.boxingSessions.create.input>;
+export type BoxingSessionResponse = z.infer<typeof api.boxingSessions.create.responses[201]>;
+export type BoxingSessionsListResponse = z.infer<typeof api.boxingSessions.list.responses[200]>;

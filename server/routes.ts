@@ -102,16 +102,16 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  // === SPECIAL SESSIONS ROUTES ===
-  app.get(api.specialSessions.list.path, async (req, res) => {
-    const sessions = await storage.getSpecialSessions();
+  // === BOXING SESSIONS ROUTES ===
+  app.get(api.boxingSessions.list.path, async (req, res) => {
+    const sessions = await storage.getBoxingSessions();
     res.json(sessions);
   });
 
-  app.post(api.specialSessions.create.path, async (req, res) => {
+  app.post(api.boxingSessions.create.path, async (req, res) => {
     try {
-      const input = api.specialSessions.create.input.parse(req.body);
-      const session = await storage.createSpecialSession(input);
+      const input = api.boxingSessions.create.input.parse(req.body);
+      const session = await storage.createBoxingSession(input);
       res.status(201).json(session);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -124,12 +124,12 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.specialSessions.delete.path, async (req, res) => {
+  app.delete(api.boxingSessions.delete.path, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) {
       return res.status(404).json({ message: "Invalid ID" });
     }
-    await storage.deleteSpecialSession(id);
+    await storage.deleteBoxingSession(id);
     res.status(204).send();
   });
 
