@@ -197,6 +197,8 @@ export default function BoxingModePage() {
     const rightShoulderValid = rightShoulder && (rightShoulder.score ?? 0) > minConfidence;
     const leftWristValid = leftWrist && (leftWrist.score ?? 0) > minConfidence;
     const rightWristValid = rightWrist && (rightWrist.score ?? 0) > minConfidence;
+    const leftElbowValid = leftElbow && (leftElbow.score ?? 0) > minConfidence;
+    const rightElbowValid = rightElbow && (rightElbow.score ?? 0) > minConfidence;
 
     if (!noseValid || (!leftShoulderValid && !rightShoulderValid)) {
       setBodyDetected(false);
@@ -206,10 +208,15 @@ export default function BoxingModePage() {
 
     const headX = nose!.x;
     const shoulderY = leftShoulderValid ? leftShoulder!.y : rightShoulder!.y;
+    const bodyCenter = leftShoulderValid && rightShoulderValid 
+      ? (leftShoulder!.x + rightShoulder!.x) / 2 
+      : (leftShoulderValid ? leftShoulder!.x : rightShoulder!.x);
     const leftWristX = leftWristValid ? leftWrist!.x : 0;
     const rightWristX = rightWristValid ? rightWrist!.x : 0;
     const leftWristY = leftWristValid ? leftWrist!.y : 999;
     const rightWristY = rightWristValid ? rightWrist!.y : 999;
+    const leftElbowX = leftElbowValid ? leftElbow!.x : leftWristX;
+    const rightElbowX = rightElbowValid ? rightElbow!.x : rightWristX;
 
     if (calibrationFrames.current < 20) {
       calibrationFrames.current++;
@@ -229,7 +236,6 @@ export default function BoxingModePage() {
 
     const frameWidth = videoRef.current?.videoWidth || 640;
     const dodgeThreshold = frameWidth * 0.08;
-    const punchThreshold = frameWidth * 0.12;
     const blockThreshold = shoulderY - 30;
 
     const now = Date.now();
@@ -242,20 +248,34 @@ export default function BoxingModePage() {
 
     let success = false;
 
+    // Dodge detection - head movement
     if (command.type === "dodge_left" && headX > baseline.headX + dodgeThreshold) {
       success = true;
     } else if (command.type === "dodge_right" && headX < baseline.headX - dodgeThreshold) {
       success = true;
-    } else if (command.type === "block" && leftWristY < blockThreshold && rightWristY < blockThreshold) {
+    } 
+    // Block detection - both arms raised
+    else if (command.type === "block" && leftWristY < blockThreshold && rightWristY < blockThreshold) {
       success = true;
-    } else if (command.type === "jab_left" && leftWristValid && leftWristX < baseline.leftWristX - punchThreshold) {
-      success = true;
-    } else if (command.type === "jab_right" && rightWristValid && rightWristX > baseline.rightWristX + punchThreshold) {
-      success = true;
-    } else if (command.type === "hook_left" && leftWristValid && leftWristX < baseline.leftWristX - punchThreshold * 1.2) {
-      success = true;
-    } else if (command.type === "hook_right" && rightWristValid && rightWristX > baseline.rightWristX + punchThreshold * 1.2) {
-      success = true;
+    }
+    // Punch detection - wrist extends past elbow toward center OR wrist raised to punch height
+    else if ((command.type === "jab_left" || command.type === "hook_left") && leftWristValid) {
+      // Left punch: wrist moves right (toward center/opponent) past elbow, or wrist raised and extended
+      const wristPastElbow = leftWristX > leftElbowX + 20;
+      const wristNearCenter = Math.abs(leftWristX - bodyCenter) < frameWidth * 0.15;
+      const wristRaised = leftWristY < shoulderY + 50;
+      if ((wristPastElbow || wristNearCenter) && wristRaised) {
+        success = true;
+      }
+    }
+    else if ((command.type === "jab_right" || command.type === "hook_right") && rightWristValid) {
+      // Right punch: wrist moves left (toward center/opponent) past elbow, or wrist raised and extended  
+      const wristPastElbow = rightWristX < rightElbowX - 20;
+      const wristNearCenter = Math.abs(rightWristX - bodyCenter) < frameWidth * 0.15;
+      const wristRaised = rightWristY < shoulderY + 50;
+      if ((wristPastElbow || wristNearCenter) && wristRaised) {
+        success = true;
+      }
     }
 
     if (success) {
