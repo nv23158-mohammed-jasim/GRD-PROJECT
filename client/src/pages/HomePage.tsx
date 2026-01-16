@@ -45,7 +45,7 @@ export default function HomePage() {
     { icon: Home, label: "Home", path: "/" },
     { icon: Play, label: "Start Workout", path: "/select-exercise" },
     { icon: Gamepad2, label: "Game Mode", path: "/game" },
-    { icon: Zap, label: "Special Mode", path: "/special" },
+    { icon: Zap, label: "Boxing Mode", path: "/boxing" },
     { icon: History, label: "Workout History", path: "/" },
   ];
 
@@ -129,11 +129,11 @@ export default function HomePage() {
                 size="lg"
                 variant="outline"
                 className="px-8 py-6 text-lg"
-                onClick={() => setLocation("/special")}
-                data-testid="button-special-mode-hero"
+                onClick={() => setLocation("/boxing")}
+                data-testid="button-boxing-mode-hero"
               >
                 <Zap className="w-5 h-5 mr-2" />
-                Special Mode
+                Boxing Mode
               </Button>
             </div>
           </CardContent>

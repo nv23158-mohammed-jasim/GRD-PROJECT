@@ -20,22 +20,20 @@ The app includes "Neon Run" - a neon-themed side-scrolling game controlled by bo
 - **Neon Aesthetic**: Purple/pink gradient sky, glowing player, colored enemies by type
 - **Game History**: All game sessions saved to database with score, stage, difficulty, time played, and completion status
 
-### Special Mode
+### Boxing Mode
 
-The app includes "Special Mode" - a situp ball-hitting game controlled by body movements:
-- **Body Position**: Face sideways to the camera in situp position
-- **Gameplay**: Balls are thrown on screen, do a situp to hit each ball
-- **Lose Condition**: Miss 10 balls and game over
-- **Win Condition**: Hit the target number of balls to pass the level
+The app includes "Boxing Mode" - a shadow boxing trainer controlled by body movements:
+- **Punches**: Extend your arm forward to throw jabs and hooks (left/right detection)
+- **Dodge**: Move your head left or right to dodge incoming attacks
+- **Block**: Raise both arms above your shoulders to block
 
-#### Special Mode Features:
-- **5 Difficulty Levels**: Progressive difficulty with faster balls and higher targets
-- **Level 1**: 3 seconds per ball, target 5 hits
-- **Level 2**: 2.5 seconds per ball, target 8 hits
-- **Level 3**: 2 seconds per ball, target 12 hits
-- **Level 4**: 1.8 seconds per ball, target 15 hits
-- **Level 5**: 1.5 seconds per ball, target 20 hits
-- **Game History**: All special mode sessions saved to database
+#### Boxing Mode Features:
+- **3 Difficulty Levels**: Easy (3 rounds), Medium (4 rounds), Hard (5 rounds)
+- **Round System**: Timed rounds with rest periods between
+- **Command Types**: Jab Left, Jab Right, Hook Left, Hook Right, Dodge Left, Dodge Right, Block
+- **Scoring**: Points for successful punches (10), dodges (15), and blocks (12)
+- **Voice Commands**: Audio cues announce each command
+- **Session History**: All boxing sessions saved to database with detailed stats
 
 ## User Preferences
 
@@ -69,7 +67,7 @@ Preferred communication style: Simple, everyday language.
   - `entries`: Daily fitness logs (steps, calories, weight, date)
   - `workout_sessions`: Exercise session records (type, difficulty, reps, grade, timing)
   - `game_sessions`: Neon Run game records (stage, difficulty, score, time played, completion status)
-  - `special_sessions`: Special Mode records (level, balls hit/missed, target, time played)
+  - `boxing_sessions`: Boxing Mode records (difficulty, rounds, score, punches/dodges/blocks stats, time played)
 
 ### Project Structure
 

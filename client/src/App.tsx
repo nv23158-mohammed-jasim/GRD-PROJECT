@@ -8,7 +8,7 @@ import HomePage from "@/pages/HomePage";
 import SelectExercisePage from "@/pages/SelectExercisePage";
 import ExercisePage from "@/pages/ExercisePage";
 import GamePage from "@/pages/GamePage";
-import SpecialModePage from "@/pages/SpecialModePage";
+import BoxingModePage from "@/pages/BoxingModePage";
 
 function Router() {
   return (
@@ -17,7 +17,7 @@ function Router() {
       <Route path="/select-exercise" component={SelectExercisePage} />
       <Route path="/exercise/:type/:difficulty/:intensity" component={ExercisePage} />
       <Route path="/game" component={GamePage} />
-      <Route path="/special" component={SpecialModePage} />
+      <Route path="/boxing" component={BoxingModePage} />
       <Route component={NotFound} />
     </Switch>
   );
