@@ -4,15 +4,20 @@
 
 A full-stack fitness tracking application that allows users to log daily fitness metrics (steps, calories, weight) and perform AI-powered workout sessions with real-time pose detection. The app uses TensorFlow.js for pose detection during exercises like push-ups and squats, providing rep counting and performance grading.
 
-### Game Mode
+### Neon Run Game Mode
 
-The app includes a "Fitness Runner" game mode - a Mario-style side-scrolling game controlled by body movements:
-- **Running**: Jog in place facing the camera to make the character run (detects vertical body oscillation)
+The app includes "Neon Run" - a neon-themed side-scrolling game controlled by body movements:
+- **Running**: Jog in place facing the camera to make the character run (detects vertical shoulder oscillation)
 - **Jump**: Raise arms above shoulders to jump over enemies
-- **Duck**: Squat down to pass under tunnels  
-- **Pushup**: Do a pushup position to restore health
+- **Pushup Revival**: When health depletes, 30-second challenge to do 10 pushups to revive with 50% health
 
-The game features obstacles (enemies, tunnels), health pickups, scoring system, and increasing difficulty over time.
+#### Game Features:
+- **3 Difficulty Levels**: Easy, Medium, Hard - affecting speed, enemy spawn rate, and damage
+- **5 Unlockable Stages**: Progressive difficulty with increasing target scores (500-3000 points)
+- **3 Enemy Types**: Walkers (ground), Flyers (aerial), Bouncers (jumping)
+- **Movement System**: Character only moves when player jogs; enemies slow to 50% when player stops
+- **Stage Progression**: Complete stages to unlock the next; progress saved to localStorage
+- **Neon Aesthetic**: Purple/pink gradient sky, glowing player, colored enemies by type
 
 ## User Preferences
 
