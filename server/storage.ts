@@ -3,12 +3,15 @@ import {
   entries,
   workoutSessions,
   gameSessions,
+  specialSessions,
   type CreateEntryRequest,
   type EntryResponse,
   type CreateWorkoutSessionRequest,
   type WorkoutSessionResponse,
   type CreateGameSessionRequest,
-  type GameSessionResponse
+  type GameSessionResponse,
+  type CreateSpecialSessionRequest,
+  type SpecialSessionResponse
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -27,6 +30,11 @@ export interface IStorage {
   getGameSessions(): Promise<GameSessionResponse[]>;
   createGameSession(session: CreateGameSessionRequest): Promise<GameSessionResponse>;
   deleteGameSession(id: number): Promise<void>;
+  
+  // Special session methods
+  getSpecialSessions(): Promise<SpecialSessionResponse[]>;
+  createSpecialSession(session: CreateSpecialSessionRequest): Promise<SpecialSessionResponse>;
+  deleteSpecialSession(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -70,6 +78,20 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGameSession(id: number): Promise<void> {
     await db.delete(gameSessions).where(eq(gameSessions.id, id));
+  }
+
+  // Special session methods
+  async getSpecialSessions(): Promise<SpecialSessionResponse[]> {
+    return await db.select().from(specialSessions).orderBy(desc(specialSessions.date));
+  }
+
+  async createSpecialSession(session: CreateSpecialSessionRequest): Promise<SpecialSessionResponse> {
+    const [created] = await db.insert(specialSessions).values(session).returning();
+    return created;
+  }
+
+  async deleteSpecialSession(id: number): Promise<void> {
+    await db.delete(specialSessions).where(eq(specialSessions.id, id));
   }
 }
 

@@ -115,7 +115,7 @@ export default function GamePage() {
       completed: number;
       timePlayed: number;
     }) => {
-      return apiRequest("/api/game-sessions", { method: "POST", body: JSON.stringify(session) });
+      return apiRequest("POST", "/api/game-sessions", session);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/game-sessions"] });

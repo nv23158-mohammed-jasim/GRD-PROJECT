@@ -102,5 +102,36 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === SPECIAL SESSIONS ROUTES ===
+  app.get(api.specialSessions.list.path, async (req, res) => {
+    const sessions = await storage.getSpecialSessions();
+    res.json(sessions);
+  });
+
+  app.post(api.specialSessions.create.path, async (req, res) => {
+    try {
+      const input = api.specialSessions.create.input.parse(req.body);
+      const session = await storage.createSpecialSession(input);
+      res.status(201).json(session);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
+  app.delete(api.specialSessions.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) {
+      return res.status(404).json({ message: "Invalid ID" });
+    }
+    await storage.deleteSpecialSession(id);
+    res.status(204).send();
+  });
+
   return httpServer;
 }

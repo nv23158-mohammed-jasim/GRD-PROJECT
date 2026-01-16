@@ -13,6 +13,18 @@ export const entries = pgTable("entries", {
   date: timestamp("date").defaultNow().notNull(),
 });
 
+// Special mode sessions (situp ball game history)
+export const specialSessions = pgTable("special_sessions", {
+  id: serial("id").primaryKey(),
+  level: integer("level").notNull(),
+  ballsHit: integer("balls_hit").notNull(),
+  ballsMissed: integer("balls_missed").notNull(),
+  targetHits: integer("target_hits").notNull(),
+  completed: integer("completed").notNull(), // 1 = passed, 0 = failed
+  timePlayed: integer("time_played").notNull(), // in seconds
+  date: timestamp("date").defaultNow().notNull(),
+});
+
 // Game sessions (Neon Run game history)
 export const gameSessions = pgTable("game_sessions", {
   id: serial("id").primaryKey(),
@@ -57,6 +69,11 @@ export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
   date: true,
 });
 
+export const insertSpecialSessionSchema = createInsertSchema(specialSessions).omit({
+  id: true,
+  date: true,
+});
+
 // === EXPLICIT API CONTRACT TYPES ===
 
 // Entry types
@@ -80,6 +97,13 @@ export type InsertGameSession = z.infer<typeof insertGameSessionSchema>;
 export type CreateGameSessionRequest = InsertGameSession;
 export type GameSessionResponse = GameSession;
 export type GameSessionsListResponse = GameSession[];
+
+// Special session types
+export type SpecialSession = typeof specialSessions.$inferSelect;
+export type InsertSpecialSession = z.infer<typeof insertSpecialSessionSchema>;
+export type CreateSpecialSessionRequest = InsertSpecialSession;
+export type SpecialSessionResponse = SpecialSession;
+export type SpecialSessionsListResponse = SpecialSession[];
 
 // Exercise and difficulty types
 export type ExerciseType = "pushups" | "squats";
