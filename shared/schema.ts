@@ -112,7 +112,7 @@ export type BoxingSessionResponse = BoxingSession;
 export type BoxingSessionsListResponse = BoxingSession[];
 
 // Exercise and difficulty types
-export type ExerciseType = "pushups" | "squats";
+export type ExerciseType = "pushups" | "squats" | "plank";
 export type DifficultyLevel = "beginner" | "medium" | "pro";
 export type IntensityLevel = 1 | 2 | 3;
 export type Grade = "A++" | "A+" | "A" | "B" | "C" | "D" | "F";
@@ -133,6 +133,7 @@ export interface DifficultyConfig {
 }
 
 // Base configs at intensity level 2 (balanced)
+// For plank: targetReps = target hold seconds
 const baseDifficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, BaseDifficultyConfig>> = {
   pushups: {
     beginner: { level: "beginner", baseTimeLimit: 90, baseTargetReps: 10 },
@@ -143,6 +144,11 @@ const baseDifficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, BaseDi
     beginner: { level: "beginner", baseTimeLimit: 90, baseTargetReps: 15 },
     medium: { level: "medium", baseTimeLimit: 75, baseTargetReps: 30 },
     pro: { level: "pro", baseTimeLimit: 60, baseTargetReps: 50 },
+  },
+  plank: {
+    beginner: { level: "beginner", baseTimeLimit: 120, baseTargetReps: 30 },
+    medium: { level: "medium", baseTimeLimit: 120, baseTargetReps: 60 },
+    pro: { level: "pro", baseTimeLimit: 120, baseTargetReps: 90 },
   },
 };
 
@@ -184,5 +190,10 @@ export const difficultyConfigs: Record<ExerciseType, Record<DifficultyLevel, Dif
     beginner: getDifficultyConfig("squats", "beginner", 2),
     medium: getDifficultyConfig("squats", "medium", 2),
     pro: getDifficultyConfig("squats", "pro", 2),
+  },
+  plank: {
+    beginner: getDifficultyConfig("plank", "beginner", 2),
+    medium: getDifficultyConfig("plank", "medium", 2),
+    pro: getDifficultyConfig("plank", "pro", 2),
   },
 };

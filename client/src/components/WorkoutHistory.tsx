@@ -2,7 +2,7 @@ import { useWorkoutSessions, useDeleteWorkoutSession } from "@/hooks/use-workout
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Dumbbell, Activity, Clock, Target } from "lucide-react";
+import { Trash2, Dumbbell, Activity, Clock, Target, Timer } from "lucide-react";
 import { format } from "date-fns";
 import type { Grade } from "@shared/schema";
 
@@ -20,7 +20,23 @@ function getGradeColor(grade: Grade): string {
 }
 
 function getExerciseIcon(type: string) {
-  return type === "pushups" ? Dumbbell : Activity;
+  if (type === "pushups") return Dumbbell;
+  if (type === "plank") return Timer;
+  return Activity;
+}
+
+function getExerciseLabel(type: string) {
+  if (type === "plank") return "Plank Hold";
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function formatRepLabel(type: string, reps: number) {
+  if (type === "plank") {
+    const m = Math.floor(reps / 60);
+    const s = reps % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+  return String(reps);
 }
 
 export function WorkoutHistory() {
@@ -64,8 +80,8 @@ export function WorkoutHistory() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold capitalize">
-                        {session.exerciseType}
+                      <span className="font-semibold">
+                        {getExerciseLabel(session.exerciseType)}
                       </span>
                       <Badge variant="outline" className="text-xs capitalize">
                         {session.difficulty}
@@ -81,7 +97,7 @@ export function WorkoutHistory() {
                   <div className="text-right hidden sm:block">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Target className="w-4 h-4" />
-                      <span>{session.completedReps}/{session.targetReps}</span>
+                      <span>{formatRepLabel(session.exerciseType, session.completedReps)}/{formatRepLabel(session.exerciseType, session.targetReps)}</span>
                     </div>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Clock className="w-4 h-4" />
