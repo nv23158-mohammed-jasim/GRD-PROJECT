@@ -63,6 +63,7 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
     repCount,
     debugInfo,
     exercisePhase,
+    plankDetected,
     startCamera,
     stopCamera,
     enableCounting,
@@ -333,15 +334,30 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
         
         {/* Body detection indicator */}
         {!isLoading && (
-          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-              isBodyDetected ? "bg-green-500" : "bg-red-500/50"
-            }`}>
-              {isBodyDetected && <Check className="w-6 h-6 text-white" />}
+          <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+            <div className="flex items-center gap-2">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                isBodyDetected ? "bg-green-500" : "bg-red-500/50"
+              }`}>
+                {isBodyDetected && <Check className="w-6 h-6 text-white" />}
+              </div>
+              <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
+                {isBodyDetected ? "Body Detected" : "Get in frame"}
+              </span>
             </div>
-            <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
-              {isBodyDetected ? "Body Detected" : "Get in frame"}
-            </span>
+            {/* Plank indicator for pushups */}
+            {exerciseType === "pushups" && isBodyDetected && (
+              <div className="flex items-center gap-2">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  plankDetected ? "bg-green-500" : "bg-yellow-500/70"
+                }`}>
+                  {plankDetected && <Check className="w-6 h-6 text-white" />}
+                </div>
+                <span className="text-white text-sm font-medium bg-black/50 px-2 py-1 rounded">
+                  {plankDetected ? "Plank Position ✓" : "Get in plank position"}
+                </span>
+              </div>
+            )}
           </div>
         )}
         
@@ -387,6 +403,16 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
               </div>
             </div>
             
+            {/* Plank lost warning during active pushup workout */}
+            {exerciseType === "pushups" && !plankDetected && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+                <div className="bg-yellow-500/80 backdrop-blur-sm rounded-xl px-6 py-3 text-center">
+                  <p className="text-black font-bold text-lg">⚠ Get back in plank!</p>
+                  <p className="text-black/80 text-sm">Keep your body horizontal & sideways</p>
+                </div>
+              </div>
+            )}
+            
             <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-10">
               <div className="bg-black/60 backdrop-blur-sm rounded-2xl px-12 py-6 text-center">
                 <p className="text-6xl font-bold text-white">{repCount}</p>
@@ -413,8 +439,16 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
         
         {/* Start button */}
         {workoutState === "ready" && !isLoading && (
-          <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-10">
+          <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-10 w-full max-w-sm px-4">
             <div className="text-center">
+              {/* Side-profile hint for pushups */}
+              {exerciseType === "pushups" && (
+                <div className="bg-black/70 backdrop-blur-sm rounded-xl px-4 py-3 mb-4 text-sm text-left">
+                  <p className="text-primary font-semibold mb-1">📐 Side Profile Setup</p>
+                  <p className="text-white/80">Turn your body <span className="text-yellow-300 font-bold">sideways</span> to the camera so the AI can see your elbow bend clearly.</p>
+                  <p className="text-white/60 mt-1 text-xs">Get into a plank position with your arm facing the camera.</p>
+                </div>
+              )}
               <p className="text-white text-lg mb-4">
                 Target: <span className="font-bold text-primary">{config.targetReps} reps</span> in{" "}
                 <span className="font-bold text-primary">{formatTime(config.timeLimit)}</span>

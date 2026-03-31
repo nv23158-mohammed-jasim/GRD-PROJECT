@@ -15,6 +15,7 @@ interface UsePoseDetectionResult {
   isCountingEnabled: boolean;
   debugInfo: string;
   exercisePhase: "up" | "down";
+  plankDetected: boolean;
   startCamera: () => Promise<void>;
   stopCamera: () => void;
   enableCounting: () => void;
@@ -56,21 +57,23 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
   const [isCountingEnabled, setIsCountingEnabled] = useState(false);
   const [debugInfo, setDebugInfo] = useState("");
   const [exercisePhase, setExercisePhase] = useState<"up" | "down">("up");
+  const [plankDetected, setPlankDetected] = useState(false);
   
   // Exercise state tracking
   const exercisePhaseRef = useRef<"up" | "down">("up");
   const countingEnabledRef = useRef(false);
-  const valueBufferRef = useRef<ValueBuffer>(createValueBuffer(7));
+  const angleBufferRef = useRef<ValueBuffer>(createValueBuffer(5));
   
   // For squats: track initial standing hip position
   const standingHipRatioRef = useRef<number | null>(null);
   const calibrationFramesRef = useRef<number>(0);
+  const squatDepthBufferRef = useRef<ValueBuffer>(createValueBuffer(7));
   
   // Prevent double counting - minimum time between reps
   const lastRepTimeRef = useRef<number>(0);
-  const MIN_REP_INTERVAL = 400; // milliseconds
+  const MIN_REP_INTERVAL = 600; // milliseconds
 
-  // Calculate angle between 3 points
+  // Calculate angle between 3 points (at the middle point p2)
   const calculateAngle = (
     p1: { x: number; y: number },
     p2: { x: number; y: number },
@@ -105,54 +108,156 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     return { x: 0, y: 0, valid: false };
   };
 
+  // Check if body is in plank position (side profile)
+  // In a plank the shoulder, hip, and ankle should all be at roughly the same height
+  const checkPlankPosition = useCallback((
+    shoulder: poseDetection.Keypoint,
+    hip: poseDetection.Keypoint | undefined,
+    ankle: poseDetection.Keypoint | undefined
+  ): boolean => {
+    const frameHeight = videoRef.current?.videoHeight || 480;
+    
+    // Need at least hip to verify plank
+    if (!hip || (hip.score ?? 0) < 0.15) {
+      // If hip not detected, just check if elbow angle looks like extended arms
+      return true;
+    }
+    
+    const shoulderY = shoulder.y / frameHeight;
+    const hipY = hip.y / frameHeight;
+    
+    // In a plank, shoulder and hip should be at similar heights (within 20% of frame)
+    const shoulderHipDiff = Math.abs(hipY - shoulderY);
+    if (shoulderHipDiff > 0.22) return false;
+    
+    // If we have ankle, check it too
+    if (ankle && (ankle.score ?? 0) > 0.15) {
+      const ankleY = ankle.y / frameHeight;
+      const shoulderAnkleDiff = Math.abs(ankleY - shoulderY);
+      if (shoulderAnkleDiff > 0.28) return false;
+    }
+    
+    // Body should be roughly horizontal — shoulder should be somewhere in the middle
+    // vertically of the frame (not standing upright)
+    // If the body is upright, hip will be MUCH lower than shoulder
+    if (hipY > shoulderY + 0.22) return false;
+    
+    return true;
+  }, []);
+
   // Process pose for rep counting
   const processPose = useCallback((keypoints: poseDetection.Keypoint[]) => {
-    if (!countingEnabledRef.current) return;
-    
-    const minConfidence = 0.25;
-    
-    if (exerciseType === "pushups") {
-      // PUSHUPS: Use elbow angle
-      const getBestElbowAngle = (): number | null => {
-        const angles: number[] = [];
-        
-        // Left arm
+    if (!countingEnabledRef.current) {
+      // Still check plank position for UI feedback even when not counting
+      if (exerciseType === "pushups") {
+        const minConf = 0.2;
         const lShoulder = keypoints.find(k => k.name === "left_shoulder");
         const lElbow = keypoints.find(k => k.name === "left_elbow");
         const lWrist = keypoints.find(k => k.name === "left_wrist");
-        
-        if (lShoulder && lElbow && lWrist && 
-            (lShoulder.score ?? 0) > minConfidence &&
-            (lElbow.score ?? 0) > minConfidence &&
-            (lWrist.score ?? 0) > minConfidence) {
-          angles.push(calculateAngle(lShoulder, lElbow, lWrist));
-        }
-        
-        // Right arm
         const rShoulder = keypoints.find(k => k.name === "right_shoulder");
         const rElbow = keypoints.find(k => k.name === "right_elbow");
         const rWrist = keypoints.find(k => k.name === "right_wrist");
+        const lHip = keypoints.find(k => k.name === "left_hip");
+        const rHip = keypoints.find(k => k.name === "right_hip");
+        const lAnkle = keypoints.find(k => k.name === "left_ankle");
+        const rAnkle = keypoints.find(k => k.name === "right_ankle");
         
-        if (rShoulder && rElbow && rWrist &&
-            (rShoulder.score ?? 0) > minConfidence &&
-            (rElbow.score ?? 0) > minConfidence &&
-            (rWrist.score ?? 0) > minConfidence) {
-          angles.push(calculateAngle(rShoulder, rElbow, rWrist));
+        const lScore = Math.min(lShoulder?.score ?? 0, lElbow?.score ?? 0, lWrist?.score ?? 0);
+        const rScore = Math.min(rShoulder?.score ?? 0, rElbow?.score ?? 0, rWrist?.score ?? 0);
+        
+        let shoulder: poseDetection.Keypoint | undefined;
+        let hip: poseDetection.Keypoint | undefined;
+        let ankle: poseDetection.Keypoint | undefined;
+        
+        if (lScore >= rScore && lScore > minConf) {
+          shoulder = lShoulder; hip = lHip; ankle = lAnkle;
+        } else if (rScore > minConf) {
+          shoulder = rShoulder; hip = rHip; ankle = rAnkle;
         }
         
-        if (angles.length === 0) return null;
-        return Math.min(...angles);
-      };
+        if (shoulder) {
+          const inPlank = checkPlankPosition(shoulder, hip, ankle);
+          setPlankDetected(inPlank);
+        }
+      }
+      return;
+    }
+    
+    const minConfidence = 0.2;
+    
+    if (exerciseType === "pushups") {
+      // SIDE-PROFILE PUSHUPS
+      // Find the best visible arm side (side profile means one arm faces camera)
+      const lShoulder = keypoints.find(k => k.name === "left_shoulder");
+      const lElbow = keypoints.find(k => k.name === "left_elbow");
+      const lWrist = keypoints.find(k => k.name === "left_wrist");
+      const rShoulder = keypoints.find(k => k.name === "right_shoulder");
+      const rElbow = keypoints.find(k => k.name === "right_elbow");
+      const rWrist = keypoints.find(k => k.name === "right_wrist");
+      const lHip = keypoints.find(k => k.name === "left_hip");
+      const rHip = keypoints.find(k => k.name === "right_hip");
+      const lAnkle = keypoints.find(k => k.name === "left_ankle");
+      const rAnkle = keypoints.find(k => k.name === "right_ankle");
       
-      const angle = getBestElbowAngle();
-      if (angle === null) return;
+      // Pick the arm side with best combined confidence
+      const lScore = Math.min(
+        lShoulder?.score ?? 0,
+        lElbow?.score ?? 0,
+        lWrist?.score ?? 0
+      );
+      const rScore = Math.min(
+        rShoulder?.score ?? 0,
+        rElbow?.score ?? 0,
+        rWrist?.score ?? 0
+      );
       
-      const smoothedAngle = addToBuffer(valueBufferRef.current, angle);
-      setDebugInfo(`Elbow: ${Math.round(smoothedAngle)}°`);
+      let shoulder: poseDetection.Keypoint | undefined;
+      let elbow: poseDetection.Keypoint | undefined;
+      let wrist: poseDetection.Keypoint | undefined;
+      let hip: poseDetection.Keypoint | undefined;
+      let ankle: poseDetection.Keypoint | undefined;
       
-      // Pushup thresholds - more forgiving
-      const downThreshold = 110;
-      const upThreshold = 135;
+      if (lScore >= rScore && lScore > minConfidence) {
+        shoulder = lShoulder; elbow = lElbow; wrist = lWrist;
+        hip = lHip; ankle = lAnkle;
+      } else if (rScore > minConfidence) {
+        shoulder = rShoulder; elbow = rElbow; wrist = rWrist;
+        hip = rHip; ankle = rAnkle;
+      }
+      
+      if (!shoulder || !elbow || !wrist) {
+        setDebugInfo("Arm not visible — face sideways");
+        setPlankDetected(false);
+        return;
+      }
+      
+      // Check plank position before counting
+      const inPlank = checkPlankPosition(shoulder, hip, ankle);
+      setPlankDetected(inPlank);
+      
+      if (!inPlank) {
+        // Compute elbow angle still for feedback
+        const angle = calculateAngle(shoulder, elbow, wrist);
+        setDebugInfo(`Not in plank | Elbow: ${Math.round(angle)}°`);
+        // Reset to up phase if leaving plank
+        if (exercisePhaseRef.current === "down") {
+          exercisePhaseRef.current = "up";
+          setExercisePhase("up");
+        }
+        return;
+      }
+      
+      // Compute smoothed elbow angle
+      const rawAngle = calculateAngle(shoulder, elbow, wrist);
+      const smoothedAngle = addToBuffer(angleBufferRef.current, rawAngle);
+      
+      setDebugInfo(`Plank ✓ | Elbow: ${Math.round(smoothedAngle)}°`);
+      
+      // Thresholds for side-profile pushup
+      // Down: arms bent (elbow angle < 100°)
+      // Up: arms extended (elbow angle > 145°)
+      const downThreshold = 100;
+      const upThreshold = 145;
       
       const now = Date.now();
       
@@ -160,7 +265,6 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
         exercisePhaseRef.current = "down";
         setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && smoothedAngle > upThreshold) {
-        // Check cooldown to prevent double counting
         if (now - lastRepTimeRef.current >= MIN_REP_INTERVAL) {
           exercisePhaseRef.current = "up";
           setExercisePhase("up");
@@ -177,31 +281,20 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       if (!shoulders.valid || !hips.valid) return;
       
-      // Calculate hip-to-shoulder vertical ratio
-      // When standing: hips are lower, ratio is larger
-      // When squatting: hips drop, ratio increases more
-      // We use the distance from shoulder to hip vs shoulder to knee
+      const shoulderToHip = hips.y - shoulders.y;
       
-      const shoulderToHip = hips.y - shoulders.y; // Positive when hip is below shoulder
-      
-      // If we have knee position, use ratio of hip position relative to knee
       let squatDepth: number;
       
       if (knees.valid) {
-        // Ratio of how far down the hip has moved toward the knee
         const shoulderToKnee = knees.y - shoulders.y;
         if (shoulderToKnee <= 0) return;
-        
         squatDepth = shoulderToHip / shoulderToKnee;
-        // Standing: ~0.5 (hip halfway between shoulder and knee)
-        // Squatting: ~0.7-0.9 (hip closer to knee level)
       } else {
-        // Fallback: just use shoulder-to-hip distance normalized by frame height
         const frameHeight = videoRef.current?.videoHeight || 480;
         squatDepth = shoulderToHip / (frameHeight * 0.4);
       }
       
-      const smoothedDepth = addToBuffer(valueBufferRef.current, squatDepth);
+      const smoothedDepth = addToBuffer(squatDepthBufferRef.current, squatDepth);
       
       // Calibrate standing position in first few frames
       if (calibrationFramesRef.current < 10) {
@@ -218,9 +311,6 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       
       setDebugInfo(`Depth: ${(depthChange * 100).toFixed(0)}%`);
       
-      // Thresholds based on depth change from standing - more forgiving
-      // Down: hip drops by 12% or more
-      // Up: hip returns to within 6% of standing position
       const downThreshold = 0.12;
       const upThreshold = 0.06;
       
@@ -230,7 +320,6 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
         exercisePhaseRef.current = "down";
         setExercisePhase("down");
       } else if (exercisePhaseRef.current === "down" && depthChange < upThreshold) {
-        // Check cooldown to prevent double counting
         if (now - lastRepTimeRef.current >= MIN_REP_INTERVAL) {
           exercisePhaseRef.current = "up";
           setExercisePhase("up");
@@ -239,7 +328,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
         }
       }
     }
-  }, [exerciseType]);
+  }, [exerciseType, checkPlankPosition]);
 
   // Draw skeleton on canvas
   const drawSkeleton = useCallback((keypoints: poseDetection.Keypoint[], canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
@@ -324,9 +413,12 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
         
         if (poses.length > 0 && poses[0].keypoints) {
           const keypoints = poses[0].keypoints;
-          const validPoints = keypoints.filter(k => (k.score ?? 0) > 0.25);
+          // For side profile pushups, fewer keypoints are visible so lower the threshold
+          const threshold = exerciseType === "pushups" ? 0.2 : 0.25;
+          const minCount = exerciseType === "pushups" ? 6 : 8;
+          const validPoints = keypoints.filter(k => (k.score ?? 0) > threshold);
           
-          setIsBodyDetected(validPoints.length >= 8);
+          setIsBodyDetected(validPoints.length >= minCount);
           drawSkeleton(keypoints, canvasRef.current!, video);
           processPose(keypoints);
         } else {
@@ -338,7 +430,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     }
     
     animationFrameRef.current = requestAnimationFrame(runDetection);
-  }, [drawSkeleton, processPose]);
+  }, [drawSkeleton, processPose, exerciseType]);
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);
@@ -433,7 +525,8 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     countingEnabledRef.current = true;
     exercisePhaseRef.current = "up";
     setExercisePhase("up");
-    valueBufferRef.current = createValueBuffer(7);
+    angleBufferRef.current = createValueBuffer(5);
+    squatDepthBufferRef.current = createValueBuffer(7);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
     lastRepTimeRef.current = 0;
@@ -449,7 +542,8 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     setRepCount(0);
     exercisePhaseRef.current = "up";
     setExercisePhase("up");
-    valueBufferRef.current = createValueBuffer(7);
+    angleBufferRef.current = createValueBuffer(5);
+    squatDepthBufferRef.current = createValueBuffer(7);
     standingHipRatioRef.current = null;
     calibrationFramesRef.current = 0;
     lastRepTimeRef.current = 0;
@@ -472,6 +566,7 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
     isCountingEnabled,
     debugInfo,
     exercisePhase,
+    plankDetected,
     startCamera,
     stopCamera,
     enableCounting,
