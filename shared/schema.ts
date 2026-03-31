@@ -53,7 +53,7 @@ export const workoutSessions = pgTable("workout_sessions", {
   completedReps: integer("completed_reps").notNull(),
   timeLimit: integer("time_limit").notNull(), // in seconds
   timeTaken: integer("time_taken").notNull(), // in seconds
-  grade: varchar("grade", { length: 10 }).notNull(), // "AA+", "A+", "A", "B", "C", "D", "F"
+  grade: varchar("grade", { length: 10 }).notNull(), // "A++", "A+", "A", "B", "C", "D", "F"
   date: timestamp("date").defaultNow().notNull(),
 });
 
@@ -115,7 +115,7 @@ export type BoxingSessionsListResponse = BoxingSession[];
 export type ExerciseType = "pushups" | "squats";
 export type DifficultyLevel = "beginner" | "medium" | "pro";
 export type IntensityLevel = 1 | 2 | 3;
-export type Grade = "AA+" | "A+" | "A" | "B" | "C" | "D" | "F";
+export type Grade = "A++" | "A+" | "A" | "B" | "C" | "D" | "F";
 
 // Base difficulty configuration (for intensity level 2)
 export interface BaseDifficultyConfig {

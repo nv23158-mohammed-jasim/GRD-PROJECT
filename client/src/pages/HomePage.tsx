@@ -34,7 +34,7 @@ export default function HomePage() {
   const totalReps = sessions?.reduce((sum, s) => sum + s.completedReps, 0) || 0;
   const bestGrade = sessions?.length
     ? sessions.reduce((best, s) => {
-        const gradeOrder = ["F", "D", "C", "B", "A", "A+", "AA+"];
+        const gradeOrder = ["F", "D", "C", "B", "A", "A+", "A++"];
         return gradeOrder.indexOf(s.grade) > gradeOrder.indexOf(best)
           ? s.grade
           : best;

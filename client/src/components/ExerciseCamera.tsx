@@ -14,7 +14,7 @@ interface ExerciseCameraProps {
 
 function calculateGrade(completedReps: number, targetReps: number): Grade {
   const ratio = completedReps / targetReps;
-  if (ratio >= 1.5) return "AA+";
+  if (ratio >= 1.5) return "A++";
   if (ratio >= 1.25) return "A+";
   if (ratio >= 1.0) return "A";
   if (ratio >= 0.8) return "B";
@@ -25,7 +25,7 @@ function calculateGrade(completedReps: number, targetReps: number): Grade {
 
 function getGradeColor(grade: Grade): string {
   switch (grade) {
-    case "AA+": return "text-yellow-400";
+    case "A++": return "text-yellow-400";
     case "A+": return "text-green-400";
     case "A": return "text-green-500";
     case "B": return "text-blue-400";

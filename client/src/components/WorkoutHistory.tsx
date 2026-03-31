@@ -8,7 +8,7 @@ import type { Grade } from "@shared/schema";
 
 function getGradeColor(grade: Grade): string {
   switch (grade) {
-    case "AA+": return "bg-yellow-500";
+    case "A++": return "bg-yellow-500";
     case "A+": return "bg-green-400";
     case "A": return "bg-green-500";
     case "B": return "bg-blue-500";
