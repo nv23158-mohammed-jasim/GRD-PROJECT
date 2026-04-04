@@ -267,15 +267,25 @@ export default function HomePage() {
         )}
 
         {/* Progress Chart */}
-        {chartData.length >= 2 && (
-          <Card className="mb-8 bg-card/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <BarChart2 className="w-5 h-5 text-primary" />
-                Progress — Last {chartData.length} Sessions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+        <Card className="mb-8 bg-card/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BarChart2 className="w-5 h-5 text-primary" />
+              Progress {chartData.length > 0 ? `— Last ${chartData.length} Sessions` : "Chart"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {chartData.length === 0 ? (
+              <div className="h-[200px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                <BarChart2 className="w-10 h-10 opacity-30" />
+                <p className="text-sm">No workouts yet — complete a session to see your progress here</p>
+              </div>
+            ) : chartData.length === 1 ? (
+              <div className="h-[200px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                <BarChart2 className="w-10 h-10 opacity-30" />
+                <p className="text-sm">Complete one more workout to unlock your progress chart</p>
+              </div>
+            ) : (
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                   <XAxis dataKey="session" tick={{ fill: "#888", fontSize: 11 }} />
@@ -290,9 +300,9 @@ export default function HomePage() {
                   <Line type="monotone" dataKey="plank" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} connectNulls name="Plank (s)" />
                 </LineChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
 
         {/* Workout History */}
         <div>
