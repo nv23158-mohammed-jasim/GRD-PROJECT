@@ -395,16 +395,24 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       }
     });
 
-    // Phase indicator
+    // Phase indicator — draw with counter-transform so CSS mirror doesn't flip text
     const phase = exercisePhaseRef.current;
-    ctx.fillStyle = (exerciseType === "plank")
+    const phaseColor = (exerciseType === "plank")
       ? (phase === "up" ? "#00ff88" : "#ff4444")
       : (phase === "down" ? "#00ff00" : "#ffffff");
+    const phaseText = exerciseType === "plank"
+      ? (phase === "up" ? "HOLDING" : "BROKEN")
+      : phase.toUpperCase();
+    // Counter-transform: ctx.transform(-1,0,0,1,W,0) + CSS scaleX(-1) = double flip = readable text
+    // Drawing at logical x V → canvas pixel (W-V) → CSS visual V
+    ctx.save();
+    ctx.transform(-1, 0, 0, 1, canvas.width, 0);
+    ctx.fillStyle = phaseColor;
     ctx.font = "bold 24px Arial";
-    ctx.fillText(
-      exerciseType === "plank" ? (phase === "up" ? "HOLDING" : "BROKEN") : phase.toUpperCase(),
-      20, canvas.height - 20
-    );
+    ctx.textAlign = "center";
+    // Want text at visual right side (W-20): draw at logical x = W-20
+    ctx.fillText(phaseText, canvas.width - 20, canvas.height - 20);
+    ctx.restore();
 
     // Squat depth indicator
     if (exerciseType === "squats") {
@@ -422,12 +430,18 @@ export function usePoseDetection(exerciseType: ExerciseType): UsePoseDetectionRe
       ctx.fillStyle = depth > 0.5 ? "#00ff88" : depth > 0.25 ? "#ffaa00" : "#ff4444";
       ctx.fillRect(bx, fillY, bw, fillH);
 
+      // Draw text with counter-transform so CSS mirror doesn't flip it
+      // Bar visually appears at left side (x≈20) after CSS flip; draw text at that visual position
+      ctx.save();
+      ctx.transform(-1, 0, 0, 1, canvas.width, 0);
       ctx.fillStyle = "rgba(255,255,255,0.8)";
       ctx.font = "bold 10px Arial";
       ctx.textAlign = "center";
-      ctx.fillText("DEPTH", bx + bw / 2, by - 6);
-      ctx.fillText(`${Math.round(depth * 100)}%`, bx + bw / 2, by + bh + 14);
-      ctx.textAlign = "left";
+      // visual bar center x = canvas.width - (bx + bw/2); drawing at that logical x makes it appear there
+      const textX = canvas.width - (bx + bw / 2);
+      ctx.fillText("DEPTH", textX, by - 6);
+      ctx.fillText(`${Math.round(depth * 100)}%`, textX, by + bh + 14);
+      ctx.restore();
     }
   }, [exerciseType]);
 

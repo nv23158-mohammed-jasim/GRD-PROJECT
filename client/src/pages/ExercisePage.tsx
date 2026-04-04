@@ -14,7 +14,7 @@ function parseIntensity(value: string | undefined): IntensityLevel {
 
 // Validate exercise type
 function parseExerciseType(value: string | undefined): ExerciseType {
-  if (value === "pushups" || value === "squats") {
+  if (value === "pushups" || value === "squats" || value === "plank") {
     return value;
   }
   return "pushups";

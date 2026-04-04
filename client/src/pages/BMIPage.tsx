@@ -39,6 +39,16 @@ function getBMIBarColor(bmi: number): string {
   return "bg-red-400";
 }
 
+// Maps BMI to a percentage position matching the 4 equal visual sections:
+// 0-25% = Underweight (BMI 14–18.5), 25-50% = Normal (18.5–25),
+// 50-75% = Overweight (25–30), 75-100% = Obese (30–40)
+function getBMIBarPercent(bmi: number): number {
+  if (bmi < 18.5) return Math.max(2, ((bmi - 14) / (18.5 - 14)) * 25);
+  if (bmi < 25)   return 25 + ((bmi - 18.5) / (25 - 18.5)) * 25;
+  if (bmi < 30)   return 50 + ((bmi - 25) / (30 - 25)) * 25;
+  return Math.min(96, 75 + ((bmi - 30) / (40 - 30)) * 25);
+}
+
 export function getSuggestedDifficulty(bmi: number, activityLevel: ActivityLevel): "beginner" | "medium" | "pro" {
   if (bmi >= 30) return "beginner";
   if (bmi >= 25) return activityLevel === "very_active" ? "medium" : "beginner";
@@ -239,7 +249,7 @@ export default function BMIPage() {
                 <div
                   className={`relative h-4 w-4 rounded-full shadow-lg border-2 border-white -mt-4 ${getBMIBarColor(profile.bmi)}`}
                   style={{
-                    marginLeft: `calc(${Math.min(Math.max(((profile.bmi - 14) / 26) * 100, 2), 96)}% - 8px)`,
+                    marginLeft: `calc(${getBMIBarPercent(profile.bmi)}% - 8px)`,
                     transition: "margin-left 0.5s ease",
                   }}
                 />
