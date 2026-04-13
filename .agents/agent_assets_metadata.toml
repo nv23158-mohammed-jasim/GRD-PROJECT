@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "_tDyJMfp3ACaNsAMe0s21"
+uri = "file://project.tar.gz"
+type = "unspecified"
+title = "Fitness Tracker — Full Project"
