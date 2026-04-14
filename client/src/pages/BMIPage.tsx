@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Activity, ArrowRight, RefreshCw } from "lucide-react";
 
 type ActivityLevel = "sedentary" | "light" | "moderate" | "very_active";
+type Gender = "male" | "female";
 
 export interface BMIProfile {
+  gender: Gender;
   age: number;
   heightCm: number;
   weightKg: number;
@@ -18,30 +20,28 @@ export interface BMIProfile {
   suggestedDifficulty: "beginner" | "medium" | "pro";
 }
 
-export function getBMICategory(bmi: number): string {
+export function getBMICategory(bmi: number, gender: Gender = "male"): string {
+  // WHO standard BMI categories are the same for both genders
   if (bmi < 18.5) return "Underweight";
-  if (bmi < 25) return "Normal";
-  if (bmi < 30) return "Overweight";
+  if (bmi < 25)   return "Normal";
+  if (bmi < 30)   return "Overweight";
   return "Obese";
 }
 
 function getBMICategoryColor(bmi: number): string {
   if (bmi < 18.5) return "text-blue-400";
-  if (bmi < 25) return "text-green-400";
-  if (bmi < 30) return "text-yellow-400";
+  if (bmi < 25)   return "text-green-400";
+  if (bmi < 30)   return "text-yellow-400";
   return "text-red-400";
 }
 
 function getBMIBarColor(bmi: number): string {
   if (bmi < 18.5) return "bg-blue-400";
-  if (bmi < 25) return "bg-green-400";
-  if (bmi < 30) return "bg-yellow-400";
+  if (bmi < 25)   return "bg-green-400";
+  if (bmi < 30)   return "bg-yellow-400";
   return "bg-red-400";
 }
 
-// Maps BMI to a percentage position matching the 4 equal visual sections:
-// 0-25% = Underweight (BMI 14–18.5), 25-50% = Normal (18.5–25),
-// 50-75% = Overweight (25–30), 75-100% = Obese (30–40)
 function getBMIBarPercent(bmi: number): number {
   if (bmi < 18.5) return Math.max(2, ((bmi - 14) / (18.5 - 14)) * 25);
   if (bmi < 25)   return 25 + ((bmi - 18.5) / (25 - 18.5)) * 25;
@@ -49,20 +49,28 @@ function getBMIBarPercent(bmi: number): number {
   return Math.min(96, 75 + ((bmi - 30) / (40 - 30)) * 25);
 }
 
-export function getSuggestedDifficulty(bmi: number, activityLevel: ActivityLevel): "beginner" | "medium" | "pro" {
-  if (bmi >= 30) return "beginner";
-  if (bmi >= 25) return activityLevel === "very_active" ? "medium" : "beginner";
-  if (bmi < 18.5) return "beginner";
+export function getSuggestedDifficulty(
+  bmi: number,
+  activityLevel: ActivityLevel,
+  gender: Gender = "male"
+): "beginner" | "medium" | "pro" {
+  // Women generally have higher body fat % at the same BMI, so we apply a slight offset
+  const adjustedBmi = gender === "female" ? bmi - 1.5 : bmi;
+
+  if (adjustedBmi >= 30) return "beginner";
+  if (adjustedBmi >= 25) return activityLevel === "very_active" ? "medium" : "beginner";
+  if (adjustedBmi < 18.5) return "beginner";
   if (activityLevel === "sedentary" || activityLevel === "light") return "beginner";
   if (activityLevel === "moderate") return "medium";
   return "pro";
 }
 
-function getDifficultyReason(bmi: number, activityLevel: ActivityLevel): string {
-  if (bmi >= 30) return "Starting with beginner ensures a safe, progressive build-up for your joints and cardiovascular system.";
-  if (bmi >= 25 && activityLevel !== "very_active") return "A beginner program helps you build a solid base while managing intensity.";
-  if (bmi >= 25) return "Your activity level is good — medium difficulty will keep you challenged safely.";
-  if (bmi < 18.5) return "Focus on form and consistency first with beginner difficulty.";
+function getDifficultyReason(bmi: number, activityLevel: ActivityLevel, gender: Gender): string {
+  const adjustedBmi = gender === "female" ? bmi - 1.5 : bmi;
+  if (adjustedBmi >= 30) return "Starting with beginner ensures a safe, progressive build-up for your joints and cardiovascular system.";
+  if (adjustedBmi >= 25 && activityLevel !== "very_active") return "A beginner program helps you build a solid base while managing intensity.";
+  if (adjustedBmi >= 25) return "Your activity level is good — medium difficulty will keep you challenged safely.";
+  if (adjustedBmi < 18.5) return "Focus on form and consistency first with beginner difficulty.";
   if (activityLevel === "sedentary") return "Starting at beginner is the best way to build sustainable habits.";
   if (activityLevel === "light") return "Beginner difficulty will quickly help you feel the progress.";
   if (activityLevel === "moderate") return "Your active lifestyle is ready for a medium challenge!";
@@ -71,19 +79,20 @@ function getDifficultyReason(bmi: number, activityLevel: ActivityLevel): string 
 
 const difficultyStyles: Record<string, string> = {
   beginner: "text-green-400 border-green-400/40 bg-green-400/10",
-  medium: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
-  pro: "text-red-400 border-red-400/40 bg-red-400/10",
+  medium:   "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
+  pro:      "text-red-400 border-red-400/40 bg-red-400/10",
 };
 
 const activityOptions: { value: ActivityLevel; label: string; desc: string }[] = [
-  { value: "sedentary", label: "Sedentary", desc: "Little or no exercise" },
-  { value: "light", label: "Lightly Active", desc: "1–3 days/week" },
-  { value: "moderate", label: "Moderately Active", desc: "3–5 days/week" },
-  { value: "very_active", label: "Very Active", desc: "6–7 days/week" },
+  { value: "sedentary",   label: "Sedentary",         desc: "Little or no exercise" },
+  { value: "light",       label: "Lightly Active",    desc: "1–3 days/week" },
+  { value: "moderate",    label: "Moderately Active", desc: "3–5 days/week" },
+  { value: "very_active", label: "Very Active",       desc: "6–7 days/week" },
 ];
 
 export default function BMIPage() {
   const [, setLocation] = useLocation();
+  const [gender, setGender] = useState<Gender>("male");
   const [age, setAge] = useState("");
   const [heightCm, setHeightCm] = useState("");
   const [weightKg, setWeightKg] = useState("");
@@ -97,6 +106,7 @@ export default function BMIPage() {
       try {
         const p: BMIProfile = JSON.parse(saved);
         setProfile(p);
+        setGender(p.gender || "male");
         setAge(String(p.age));
         setHeightCm(String(p.heightCm));
         setWeightKg(String(p.weightKg));
@@ -111,14 +121,15 @@ export default function BMIPage() {
   const handleCalculate = () => {
     if (!canCalculate) return;
     const bmiVal = parseFloat(weightKg) / Math.pow(parseFloat(heightCm) / 100, 2);
-    const difficulty = getSuggestedDifficulty(bmiVal, activityLevel);
+    const difficulty = getSuggestedDifficulty(bmiVal, activityLevel, gender);
     const newProfile: BMIProfile = {
+      gender,
       age: parseInt(age),
       heightCm: parseFloat(heightCm),
       weightKg: parseFloat(weightKg),
       activityLevel,
       bmi: Math.round(bmiVal * 10) / 10,
-      category: getBMICategory(bmiVal),
+      category: getBMICategory(bmiVal, gender),
       suggestedDifficulty: difficulty,
     };
     setProfile(newProfile);
@@ -157,6 +168,38 @@ export default function BMIPage() {
               <CardTitle className="text-lg">Your Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+
+              {/* Gender selector */}
+              <div>
+                <Label className="text-sm mb-2 block">Gender</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                      gender === "male"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border hover:border-primary/50 text-muted-foreground"
+                    }`}
+                    onClick={() => setGender("male")}
+                    data-testid="button-gender-male"
+                  >
+                    <span className="text-2xl">♂</span>
+                    Male
+                  </button>
+                  <button
+                    className={`flex flex-col items-center justify-center gap-2 py-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                      gender === "female"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border hover:border-primary/50 text-muted-foreground"
+                    }`}
+                    onClick={() => setGender("female")}
+                    data-testid="button-gender-female"
+                  >
+                    <span className="text-2xl">♀</span>
+                    Female
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm mb-1 block">Age</Label>
@@ -228,6 +271,13 @@ export default function BMIPage() {
         ) : (
           <Card className="mb-6 border-primary/20">
             <CardContent className="p-6">
+              {/* Gender badge */}
+              <div className="flex justify-center mb-4">
+                <span className="px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-semibold capitalize">
+                  {profile.gender === "male" ? "♂ Male" : "♀ Female"}
+                </span>
+              </div>
+
               <div className="text-center mb-5">
                 <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Your BMI</p>
                 <p className={`text-7xl font-bold ${getBMICategoryColor(profile.bmi)}`}>
@@ -282,7 +332,7 @@ export default function BMIPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1 opacity-70">Recommended Difficulty</p>
                 <p className="text-2xl font-bold capitalize mb-2">{profile.suggestedDifficulty}</p>
                 <p className="text-xs opacity-80 leading-relaxed">
-                  {getDifficultyReason(profile.bmi, profile.activityLevel)}
+                  {getDifficultyReason(profile.bmi, profile.activityLevel, profile.gender)}
                 </p>
               </div>
 
