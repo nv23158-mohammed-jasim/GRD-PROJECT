@@ -5,6 +5,7 @@ import { getDifficultyConfig, type DifficultyLevel, type IntensityLevel, type Gr
 import { Check, Loader2, AlertCircle, ExternalLink, Square, Volume2, VolumeX, Timer, Coffee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 import type { BMIProfile } from "@/pages/BMIPage";
 
 interface ExerciseCameraProps {
@@ -58,6 +59,7 @@ function formatSeconds(s: number): string {
 
 export function ExerciseCamera({ exerciseType, difficulty, intensity }: ExerciseCameraProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const config = getDifficultyConfig(exerciseType, difficulty, intensity);
   const isPlank = exerciseType === "plank";
 
@@ -185,8 +187,12 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
         timeTaken: Math.min(elapsed, config.timeLimit),
         grade: finalGrade,
       });
-    } catch (err) { console.error("Failed to save:", err); }
-  }, [config, exerciseType, difficulty, intensity, createSession, disableCounting, audioEnabled, isPlank]);
+      toast({ title: "Workout saved!", description: "Your session has been added to your history." });
+    } catch (err) {
+      console.error("Failed to save:", err);
+      toast({ title: "Save failed", description: "Could not save your workout. Please check your connection.", variant: "destructive" });
+    }
+  }, [config, exerciseType, difficulty, intensity, createSession, disableCounting, audioEnabled, isPlank, toast]);
 
   const handleStart = () => {
     if (!isBodyDetected) return;

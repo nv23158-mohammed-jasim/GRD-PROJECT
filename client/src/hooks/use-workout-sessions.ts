@@ -5,6 +5,8 @@ import type { WorkoutSession, CreateWorkoutSessionRequest } from "@shared/schema
 export function useWorkoutSessions() {
   return useQuery<WorkoutSession[]>({
     queryKey: ["/api/workout-sessions"],
+    staleTime: 0,
+    refetchOnMount: true,
   });
 }
 
@@ -15,7 +17,7 @@ export function useCreateWorkoutSession() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workout-sessions"] });
+      queryClient.refetchQueries({ queryKey: ["/api/workout-sessions"] });
     },
   });
 }
