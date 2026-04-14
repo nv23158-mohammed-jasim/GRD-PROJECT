@@ -171,11 +171,15 @@ export default function HomePage() {
           >
             <CardContent className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                  <User className="w-6 h-6 text-primary" />
-                </div>
+                {user?.picture ? (
+                  <img src={user.picture} alt={user.name} className="w-12 h-12 rounded-full object-cover" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <User className="w-6 h-6 text-primary" />
+                  </div>
+                )}
                 <div>
-                  <p className="font-semibold text-white">BMI Profile</p>
+                  <p className="font-semibold text-white">{user?.name || "BMI Profile"}</p>
                   <p className="text-sm text-muted-foreground">
                     BMI: <span className="text-white font-medium">{bmiProfile.bmi}</span>
                     {" · "}{bmiProfile.category}
