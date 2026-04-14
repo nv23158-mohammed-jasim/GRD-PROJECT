@@ -38,16 +38,70 @@ export async function ensureSchema() {
       );
       CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
     `);
-    // Add intensity column if missing
+    // Entries table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS entries (
+        id serial PRIMARY KEY,
+        user_id varchar,
+        steps integer NOT NULL,
+        calories integer NOT NULL,
+        weight decimal(5,2) NOT NULL,
+        date timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    // Workout sessions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS workout_sessions (
+        id serial PRIMARY KEY,
+        user_id varchar,
+        exercise_type varchar(50) NOT NULL,
+        difficulty varchar(20) NOT NULL,
+        intensity integer NOT NULL DEFAULT 2,
+        target_reps integer NOT NULL,
+        completed_reps integer NOT NULL,
+        time_limit integer NOT NULL,
+        time_taken integer NOT NULL,
+        grade varchar(10) NOT NULL,
+        date timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    // Game sessions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS game_sessions (
+        id serial PRIMARY KEY,
+        user_id varchar,
+        difficulty varchar(20) NOT NULL,
+        stage integer NOT NULL,
+        score integer NOT NULL,
+        target_score integer NOT NULL,
+        completed integer NOT NULL,
+        time_played integer NOT NULL,
+        date timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    // Boxing sessions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS boxing_sessions (
+        id serial PRIMARY KEY,
+        user_id varchar,
+        difficulty varchar(20) NOT NULL,
+        round integer NOT NULL,
+        total_rounds integer NOT NULL,
+        score integer NOT NULL,
+        punches_landed integer NOT NULL,
+        punches_missed integer NOT NULL,
+        dodges_successful integer NOT NULL,
+        dodges_missed integer NOT NULL,
+        blocks_successful integer NOT NULL,
+        blocks_missed integer NOT NULL,
+        completed integer NOT NULL,
+        time_played integer NOT NULL,
+        date timestamp DEFAULT now() NOT NULL
+      );
+    `);
+    // Add intensity column if missing (for older deployments)
     await client.query(`
       ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS intensity integer NOT NULL DEFAULT 2;
-    `);
-    // Add userId columns to all tables
-    await client.query(`
-      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_id varchar;
-      ALTER TABLE game_sessions    ADD COLUMN IF NOT EXISTS user_id varchar;
-      ALTER TABLE boxing_sessions  ADD COLUMN IF NOT EXISTS user_id varchar;
-      ALTER TABLE entries          ADD COLUMN IF NOT EXISTS user_id varchar;
     `);
   } catch (err) {
     console.error("[db] Schema migration warning:", err);
