@@ -13,17 +13,14 @@ export function useWorkoutSessions() {
 export function useCreateWorkoutSession() {
   return useMutation({
     mutationFn: async (session: CreateWorkoutSessionRequest) => {
-      console.log("[workout-save] Sending:", JSON.stringify(session));
       const res = await fetch("/api/workout-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(session),
         credentials: "include",
       });
-      console.log("[workout-save] Response status:", res.status);
       if (!res.ok) {
         const text = await res.text();
-        console.error("[workout-save] Error body:", text);
         throw new Error(`${res.status}: ${text}`);
       }
       return res.json();
