@@ -189,8 +189,9 @@ export function ExerciseCamera({ exerciseType, difficulty, intensity }: Exercise
       });
       toast({ title: "Workout saved!", description: "Your session has been added to your history." });
     } catch (err) {
-      console.error("Failed to save:", err);
-      toast({ title: "Save failed", description: "Could not save your workout. Please check your connection.", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Failed to save:", msg);
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
     }
   }, [config, exerciseType, difficulty, intensity, createSession, disableCounting, audioEnabled, isPlank, toast]);
 
