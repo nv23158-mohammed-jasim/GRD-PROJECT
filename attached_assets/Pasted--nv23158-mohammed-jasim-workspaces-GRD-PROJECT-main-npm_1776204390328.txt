@@ -1,0 +1,49 @@
+@nv23158-mohammed-jasim ➜ /workspaces/GRD-PROJECT (main) $ npm run dev
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from /workspaces/GRD-PROJECT/server/index.ts
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:316:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:858:18)
+    at defaultResolve (node:internal/modules/esm/resolve:990:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204338654:2:3744)
+    at resolveDirectory (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204338654:2:4243)
+    at resolveTsPaths (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204338654:2:4984)
+    at resolve (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204338654:2:5361)
+    at nextResolve (node:internal/modules/esm/hooks:785:28) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.11.1
+@nv23158-mohammed-jasim ➜ /workspaces/GRD-PROJECT (main) $ npm run dev
+
+> rest-express@1.0.0 dev
+> NODE_ENV=development tsx server/index.ts
+
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'dotenv' imported from /workspaces/GRD-PROJECT/server/index.ts
+    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:316:9)
+    at packageResolve (node:internal/modules/esm/resolve:768:81)
+    at moduleResolve (node:internal/modules/esm/resolve:858:18)
+    at defaultResolve (node:internal/modules/esm/resolve:990:11)
+    at nextResolve (node:internal/modules/esm/hooks:785:28)
+    at resolveBase (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204364125:2:3744)
+    at resolveDirectory (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204364125:2:4243)
+    at resolveTsPaths (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204364125:2:4984)
+    at resolve (file:///workspaces/GRD-PROJECT/node_modules/tsx/dist/esm/index.mjs?1776204364125:2:5361)
+    at nextResolve (node:internal/modules/esm/hooks:785:28) {
+  code: 'ERR_MODULE_NOT_FOUND'
+}
+
+Node.js v24.11.1
+@nv23158-mohammed-jasim ➜ /workspaces/GRD-PROJECT (main) $ 
