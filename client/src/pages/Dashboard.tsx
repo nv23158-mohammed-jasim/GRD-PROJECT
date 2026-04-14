@@ -65,7 +65,7 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center space-x-2 text-primary font-bold tracking-wider uppercase text-sm mb-2">
                 <Activity className="w-4 h-4" />
-                <span>Fitness Tracker Pro</span>
+                <span>LAB — Learn And Burn</span>
               </div>
               <h1 className="text-4xl md:text-5xl font-display font-bold text-white mb-2">
                 Your Progress

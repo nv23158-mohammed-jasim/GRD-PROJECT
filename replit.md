@@ -1,4 +1,4 @@
-# Fitness Tracker
+# LAB — Learn And Burn
 
 ## Overview
 

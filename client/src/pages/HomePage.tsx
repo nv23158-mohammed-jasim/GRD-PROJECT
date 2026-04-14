@@ -103,7 +103,7 @@ export default function HomePage() {
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <Activity className="w-6 h-6 text-primary" />
-                  Fitness Tracker
+                  LAB
                 </SheetTitle>
               </SheetHeader>
               <nav className="mt-8 space-y-2">
@@ -125,7 +125,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2">
             <Activity className="w-6 h-6 text-primary" />
-            <span className="font-bold text-lg">Fitness Tracker</span>
+            <span className="font-bold text-lg">LAB</span>
           </div>
           <div className="w-10" />
         </div>
