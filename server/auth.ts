@@ -57,7 +57,9 @@ export function setupAuth(app: Express) {
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     const callbackURL =
       process.env.GOOGLE_CALLBACK_URL ||
-      "https://grd-project-server.onrender.com/auth/google/callback";
+      (process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/google/callback`
+        : "https://grd-project-server.onrender.com/auth/google/callback");
 
     passport.use(
       new GoogleStrategy(
