@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { API_BASE_URL } from "@/lib/queryClient";
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -54,7 +55,7 @@ export default function LoginPage() {
         {/* Login */}
         <div className="w-full flex flex-col items-center gap-4">
           <a
-            href="/auth/google"
+            href={`${API_BASE_URL}/auth/google`}
             className="w-full"
             data-testid="button-google-login"
           >

@@ -33,7 +33,7 @@ export function setupAuth(app: Express) {
       cookie: {
         secure: process.env.NODE_ENV === "production",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        sameSite: "lax",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       },
     })
   );
@@ -106,8 +106,12 @@ export function setupAuth(app: Express) {
 
   app.get(
     "/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/login" }),
-    (_req, res) => res.redirect("/")
+    passport.authenticate("google", {
+      failureRedirect: process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/login`
+        : "/login",
+    }),
+    (_req, res) => res.redirect(process.env.FRONTEND_URL || "/")
   );
 
   app.post("/auth/logout", (req, res) => {
