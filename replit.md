@@ -1,4 +1,4 @@
-# LAB — Learn And Burn
+# LAB
 
 ## Overview
 
