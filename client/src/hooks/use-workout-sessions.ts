@@ -13,16 +13,7 @@ export function useWorkoutSessions() {
 export function useCreateWorkoutSession() {
   return useMutation({
     mutationFn: async (session: CreateWorkoutSessionRequest) => {
-      const res = await fetch("/api/workout-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(session),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`${res.status}: ${text}`);
-      }
+      const res = await apiRequest("POST", "/api/workout-sessions", session);
       return res.json();
     },
     onSuccess: () => {
