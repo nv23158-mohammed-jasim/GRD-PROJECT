@@ -4,9 +4,19 @@ import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
 
+// Users (authenticated via Google OAuth)
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey(), // Google sub ID
+  email: varchar("email", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  picture: varchar("picture", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Daily fitness entries (steps, calories, weight tracking)
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   steps: integer("steps").notNull(),
   calories: integer("calories").notNull(),
   weight: decimal("weight", { precision: 5, scale: 2 }).notNull(),
@@ -16,6 +26,7 @@ export const entries = pgTable("entries", {
 // Boxing mode sessions (shadow boxing trainer history)
 export const boxingSessions = pgTable("boxing_sessions", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
   round: integer("round").notNull(),
   totalRounds: integer("total_rounds").notNull(),
@@ -34,6 +45,7 @@ export const boxingSessions = pgTable("boxing_sessions", {
 // Game sessions (Neon Run game history)
 export const gameSessions = pgTable("game_sessions", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
   stage: integer("stage").notNull(),
   score: integer("score").notNull(),
@@ -46,7 +58,8 @@ export const gameSessions = pgTable("game_sessions", {
 // Workout sessions (pushups, squats with pose detection)
 export const workoutSessions = pgTable("workout_sessions", {
   id: serial("id").primaryKey(),
-  exerciseType: varchar("exercise_type", { length: 50 }).notNull(), // "pushups" | "squats"
+  userId: varchar("user_id"),
+  exerciseType: varchar("exercise_type", { length: 50 }).notNull(), // "pushups" | "squats" | "plank"
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "beginner" | "medium" | "pro"
   intensity: integer("intensity").default(2).notNull(), // 1, 2, or 3
   targetReps: integer("target_reps").notNull(),
@@ -60,7 +73,8 @@ export const workoutSessions = pgTable("workout_sessions", {
 // === BASE SCHEMAS ===
 export const insertEntrySchema = createInsertSchema(entries).omit({ 
   id: true, 
-  date: true 
+  date: true,
+  userId: true,
 }).extend({
   weight: z.preprocess((val) => String(val), z.string()), 
 });
@@ -68,19 +82,25 @@ export const insertEntrySchema = createInsertSchema(entries).omit({
 export const insertWorkoutSessionSchema = createInsertSchema(workoutSessions).omit({
   id: true,
   date: true,
+  userId: true,
 });
 
 export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({
   id: true,
   date: true,
+  userId: true,
 });
 
 export const insertBoxingSessionSchema = createInsertSchema(boxingSessions).omit({
   id: true,
   date: true,
+  userId: true,
 });
 
 // === EXPLICIT API CONTRACT TYPES ===
+
+// User types
+export type User = typeof users.$inferSelect;
 
 // Entry types
 export type Entry = typeof entries.$inferSelect;

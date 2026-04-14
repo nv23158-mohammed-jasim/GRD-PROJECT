@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,30 +11,66 @@ import ExercisePage from "@/pages/ExercisePage";
 import GamePage from "@/pages/GamePage";
 import BoxingModePage from "@/pages/BoxingModePage";
 import BMIPage from "@/pages/BMIPage";
+import LoginPage from "@/pages/LoginPage";
+import { useAuth } from "@/hooks/use-auth";
 
-function Router() {
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
   const [, navigate] = useLocation();
-  const [checked, setChecked] = useState(false);
 
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate("/login");
+    }
+  }, [isLoading, isAuthenticated]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) return null;
+  return <>{children}</>;
+}
+
+function BmiRedirect() {
+  const [location, navigate] = useLocation();
   useEffect(() => {
     const hasBmi = !!localStorage.getItem("fitness_bmi_profile");
     const hasSeen = !!localStorage.getItem("fitness_bmi_seen");
-    if (!hasBmi && !hasSeen && window.location.pathname === "/") {
-      navigate("/bmi");
-    }
-    setChecked(true);
+    if (!hasBmi && !hasSeen) navigate("/bmi");
   }, []);
+  return null;
+}
 
-  if (!checked) return null;
-
+function Router() {
   return (
     <Switch>
-      <Route path="/" component={HomePage} />
-      <Route path="/bmi" component={BMIPage} />
-      <Route path="/select-exercise" component={SelectExercisePage} />
-      <Route path="/exercise/:type/:difficulty/:intensity" component={ExercisePage} />
-      <Route path="/game" component={GamePage} />
-      <Route path="/boxing" component={BoxingModePage} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/">
+        <AuthGuard>
+          <BmiRedirect />
+          <HomePage />
+        </AuthGuard>
+      </Route>
+      <Route path="/bmi">
+        <AuthGuard><BMIPage /></AuthGuard>
+      </Route>
+      <Route path="/select-exercise">
+        <AuthGuard><SelectExercisePage /></AuthGuard>
+      </Route>
+      <Route path="/exercise/:type/:difficulty/:intensity">
+        <AuthGuard><ExercisePage /></AuthGuard>
+      </Route>
+      <Route path="/game">
+        <AuthGuard><GamePage /></AuthGuard>
+      </Route>
+      <Route path="/boxing">
+        <AuthGuard><BoxingModePage /></AuthGuard>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

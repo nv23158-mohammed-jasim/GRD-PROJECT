@@ -58,16 +58,28 @@ Preferred communication style: Simple, everyday language.
 - **API Design**: REST API with typed contracts defined in `shared/routes.ts`
 - **Validation**: Zod schemas for request/response validation shared between client and server
 
+### Authentication
+
+- **Method**: Google OAuth 2.0 via Passport.js
+- **Session storage**: PostgreSQL (`session` table) via connect-pg-simple
+- **Files**: `server/auth.ts` — passport setup, session middleware, auth routes
+- **Routes**: GET `/auth/google`, GET `/auth/google/callback`, POST `/auth/logout`, GET `/api/auth/me`
+- **Frontend guard**: `AuthGuard` component in App.tsx; `use-auth.ts` hook
+- **Required env vars**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (already set), optionally `GOOGLE_CALLBACK_URL`
+- **Default callback**: `https://grd-project-server.onrender.com/auth/google/callback`
+
 ### Data Storage
 
 - **Database**: PostgreSQL
 - **ORM**: Drizzle ORM with type-safe schema definitions
 - **Schema Location**: `shared/schema.ts` contains all table definitions
 - **Tables**:
-  - `entries`: Daily fitness logs (steps, calories, weight, date)
-  - `workout_sessions`: Exercise session records (type, difficulty, reps, grade, timing)
-  - `game_sessions`: Neon Run game records (stage, difficulty, score, time played, completion status)
-  - `boxing_sessions`: Boxing Mode records (difficulty, rounds, score, punches/dodges/blocks stats, time played)
+  - `users`: Google OAuth user records (id = Google sub, email, name, picture)
+  - `session`: Express session store (managed by connect-pg-simple)
+  - `entries`: Daily fitness logs (steps, calories, weight, date, userId)
+  - `workout_sessions`: Exercise session records (type, difficulty, reps, grade, timing, userId)
+  - `game_sessions`: Neon Run game records (stage, difficulty, score, time played, completion status, userId)
+  - `boxing_sessions`: Boxing Mode records (difficulty, rounds, score, punches/dodges/blocks stats, time played, userId)
 
 ### Project Structure
 

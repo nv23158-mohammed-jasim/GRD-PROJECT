@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkoutHistory } from "@/components/WorkoutHistory";
 import { useWorkoutSessions } from "@/hooks/use-workout-sessions";
+import { useAuth } from "@/hooks/use-auth";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Menu, Activity, Dumbbell, History, Home, Play, TrendingUp, Award,
-  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User,
+  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut,
 } from "lucide-react";
 import type { WorkoutSession } from "@shared/schema";
 import type { BMIProfile } from "@/pages/BMIPage";
@@ -52,6 +53,7 @@ function getBestReps(sessions: WorkoutSession[], type: string): number {
 export default function HomePage() {
   const [, setLocation] = useLocation();
   const { data: sessions } = useWorkoutSessions();
+  const { user, logout, isLoggingOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [bmiProfile, setBmiProfile] = useState<BMIProfile | null>(null);
 
@@ -99,14 +101,29 @@ export default function HomePage() {
                 <Menu className="w-6 h-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72">
+            <SheetContent side="left" className="w-72 flex flex-col">
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <Activity className="w-6 h-6 text-primary" />
                   LAB
                 </SheetTitle>
               </SheetHeader>
-              <nav className="mt-8 space-y-2">
+              {user && (
+                <div className="flex items-center gap-3 mt-4 px-1 py-3 border-b border-white/10">
+                  {user.picture ? (
+                    <img src={user.picture} alt={user.name} className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center">
+                      <span className="text-white text-sm font-bold">{user.name[0]}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+                    <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                  </div>
+                </div>
+              )}
+              <nav className="mt-4 space-y-2 flex-1">
                 {menuItems.map((item) => (
                   <Button
                     key={item.label}
@@ -120,6 +137,18 @@ export default function HomePage() {
                   </Button>
                 ))}
               </nav>
+              <div className="border-t border-white/10 pt-3 mt-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-3 text-zinc-400 hover:text-red-400"
+                  onClick={() => logout()}
+                  disabled={isLoggingOut}
+                  data-testid="button-logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                  {isLoggingOut ? "Signing out…" : "Sign out"}
+                </Button>
+              </div>
             </SheetContent>
           </Sheet>
 
