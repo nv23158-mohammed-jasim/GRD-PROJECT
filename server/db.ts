@@ -110,6 +110,17 @@ export async function ensureSchema() {
     await client.query(`
       ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS intensity integer NOT NULL DEFAULT 2;
     `);
+    // Add user_email and user_name columns to all session tables (for admin visibility in Neon)
+    await client.query(`
+      ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_email varchar(255);
+      ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_name varchar(255);
+      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
+      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
+      ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
+      ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
+      ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
+      ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
+    `);
   } catch (err) {
     console.error("[db] Schema migration warning:", err);
   } finally {

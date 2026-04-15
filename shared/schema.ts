@@ -17,6 +17,8 @@ export const users = pgTable("users", {
 export const bmiEntries = pgTable("bmi_entries", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
+  userEmail: varchar("user_email", { length: 255 }),
+  userName: varchar("user_name", { length: 255 }),
   age: integer("age").notNull(),
   heightCm: decimal("height_cm", { precision: 5, scale: 1 }).notNull(),
   weightKg: decimal("weight_kg", { precision: 5, scale: 1 }).notNull(),
@@ -32,6 +34,8 @@ export const bmiEntries = pgTable("bmi_entries", {
 export const boxingSessions = pgTable("boxing_sessions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id"),
+  userEmail: varchar("user_email", { length: 255 }),
+  userName: varchar("user_name", { length: 255 }),
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
   round: integer("round").notNull(),
   totalRounds: integer("total_rounds").notNull(),
@@ -51,6 +55,8 @@ export const boxingSessions = pgTable("boxing_sessions", {
 export const gameSessions = pgTable("game_sessions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id"),
+  userEmail: varchar("user_email", { length: 255 }),
+  userName: varchar("user_name", { length: 255 }),
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "easy" | "medium" | "hard"
   stage: integer("stage").notNull(),
   score: integer("score").notNull(),
@@ -64,6 +70,8 @@ export const gameSessions = pgTable("game_sessions", {
 export const workoutSessions = pgTable("workout_sessions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id"),
+  userEmail: varchar("user_email", { length: 255 }),
+  userName: varchar("user_name", { length: 255 }),
   exerciseType: varchar("exercise_type", { length: 50 }).notNull(), // "pushups" | "squats" | "plank"
   difficulty: varchar("difficulty", { length: 20 }).notNull(), // "beginner" | "medium" | "pro"
   intensity: integer("intensity").default(2).notNull(), // 1, 2, or 3

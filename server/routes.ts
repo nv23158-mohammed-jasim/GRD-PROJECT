@@ -17,8 +17,9 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ message: "Not authenticated" });
 }
 
-function userId(req: Request): string {
-  return (req.user as Express.User).id;
+function userIdentity(req: Request) {
+  const u = req.user as Express.User;
+  return { id: u.id, email: u.email, name: u.name };
 }
 
 export async function registerRoutes(
@@ -28,14 +29,14 @@ export async function registerRoutes(
 
   // === BMI ENTRIES ROUTES ===
   app.get(api.bmiEntries.list.path, requireAuth, async (req, res) => {
-    const entries = await storage.getBmiEntries(userId(req));
+    const entries = await storage.getBmiEntries(userIdentity(req).id);
     res.json(entries);
   });
 
   app.post(api.bmiEntries.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.bmiEntries.create.input.parse(req.body);
-      const entry = await storage.createBmiEntry(input, userId(req));
+      const entry = await storage.createBmiEntry(input, userIdentity(req));
       res.status(201).json(entry);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -50,14 +51,14 @@ export async function registerRoutes(
 
   // === WORKOUT SESSIONS ROUTES ===
   app.get(api.workoutSessions.list.path, requireAuth, async (req, res) => {
-    const sessions = await storage.getWorkoutSessions(userId(req));
+    const sessions = await storage.getWorkoutSessions(userIdentity(req).id);
     res.json(sessions);
   });
 
   app.post(api.workoutSessions.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.workoutSessions.create.input.parse(req.body);
-      const session = await storage.createWorkoutSession(input, userId(req));
+      const session = await storage.createWorkoutSession(input, userIdentity(req));
       res.status(201).json(session);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -73,20 +74,20 @@ export async function registerRoutes(
   app.delete(api.workoutSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
-    await storage.deleteWorkoutSession(id, userId(req));
+    await storage.deleteWorkoutSession(id, userIdentity(req).id);
     res.status(204).send();
   });
 
   // === GAME SESSIONS ROUTES ===
   app.get(api.gameSessions.list.path, requireAuth, async (req, res) => {
-    const sessions = await storage.getGameSessions(userId(req));
+    const sessions = await storage.getGameSessions(userIdentity(req).id);
     res.json(sessions);
   });
 
   app.post(api.gameSessions.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.gameSessions.create.input.parse(req.body);
-      const session = await storage.createGameSession(input, userId(req));
+      const session = await storage.createGameSession(input, userIdentity(req));
       res.status(201).json(session);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -102,20 +103,20 @@ export async function registerRoutes(
   app.delete(api.gameSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
-    await storage.deleteGameSession(id, userId(req));
+    await storage.deleteGameSession(id, userIdentity(req).id);
     res.status(204).send();
   });
 
   // === BOXING SESSIONS ROUTES ===
   app.get(api.boxingSessions.list.path, requireAuth, async (req, res) => {
-    const sessions = await storage.getBoxingSessions(userId(req));
+    const sessions = await storage.getBoxingSessions(userIdentity(req).id);
     res.json(sessions);
   });
 
   app.post(api.boxingSessions.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.boxingSessions.create.input.parse(req.body);
-      const session = await storage.createBoxingSession(input, userId(req));
+      const session = await storage.createBoxingSession(input, userIdentity(req));
       res.status(201).json(session);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -131,7 +132,7 @@ export async function registerRoutes(
   app.delete(api.boxingSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
-    await storage.deleteBoxingSession(id, userId(req));
+    await storage.deleteBoxingSession(id, userIdentity(req).id);
     res.status(204).send();
   });
 

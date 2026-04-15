@@ -17,27 +17,33 @@ import {
 } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
+interface UserIdentity {
+  id: string;
+  email: string;
+  name: string;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | null>;
 
   // BMI entry methods
   getBmiEntries(userId: string): Promise<BmiEntryResponse[]>;
-  createBmiEntry(entry: CreateBmiEntryRequest, userId: string): Promise<BmiEntryResponse>;
+  createBmiEntry(entry: CreateBmiEntryRequest, user: UserIdentity): Promise<BmiEntryResponse>;
 
   // Workout session methods
   getWorkoutSessions(userId: string): Promise<WorkoutSessionResponse[]>;
-  createWorkoutSession(session: CreateWorkoutSessionRequest, userId: string): Promise<WorkoutSessionResponse>;
+  createWorkoutSession(session: CreateWorkoutSessionRequest, user: UserIdentity): Promise<WorkoutSessionResponse>;
   deleteWorkoutSession(id: number, userId: string): Promise<void>;
 
   // Game session methods
   getGameSessions(userId: string): Promise<GameSessionResponse[]>;
-  createGameSession(session: CreateGameSessionRequest, userId: string): Promise<GameSessionResponse>;
+  createGameSession(session: CreateGameSessionRequest, user: UserIdentity): Promise<GameSessionResponse>;
   deleteGameSession(id: number, userId: string): Promise<void>;
 
   // Boxing session methods
   getBoxingSessions(userId: string): Promise<BoxingSessionResponse[]>;
-  createBoxingSession(session: CreateBoxingSessionRequest, userId: string): Promise<BoxingSessionResponse>;
+  createBoxingSession(session: CreateBoxingSessionRequest, user: UserIdentity): Promise<BoxingSessionResponse>;
   deleteBoxingSession(id: number, userId: string): Promise<void>;
 }
 
@@ -54,8 +60,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(bmiEntries.date));
   }
 
-  async createBmiEntry(entry: CreateBmiEntryRequest, userId: string): Promise<BmiEntryResponse> {
-    const [created] = await db.insert(bmiEntries).values({ ...entry, userId }).returning();
+  async createBmiEntry(entry: CreateBmiEntryRequest, user: UserIdentity): Promise<BmiEntryResponse> {
+    const [created] = await db.insert(bmiEntries).values({
+      ...entry,
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+    }).returning();
     return created;
   }
 
@@ -66,8 +77,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(workoutSessions.date));
   }
 
-  async createWorkoutSession(session: CreateWorkoutSessionRequest, userId: string): Promise<WorkoutSessionResponse> {
-    const [created] = await db.insert(workoutSessions).values({ ...session, userId }).returning();
+  async createWorkoutSession(session: CreateWorkoutSessionRequest, user: UserIdentity): Promise<WorkoutSessionResponse> {
+    const [created] = await db.insert(workoutSessions).values({
+      ...session,
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+    }).returning();
     return created;
   }
 
@@ -82,8 +98,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(gameSessions.date));
   }
 
-  async createGameSession(session: CreateGameSessionRequest, userId: string): Promise<GameSessionResponse> {
-    const [created] = await db.insert(gameSessions).values({ ...session, userId }).returning();
+  async createGameSession(session: CreateGameSessionRequest, user: UserIdentity): Promise<GameSessionResponse> {
+    const [created] = await db.insert(gameSessions).values({
+      ...session,
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+    }).returning();
     return created;
   }
 
@@ -98,8 +119,13 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(boxingSessions.date));
   }
 
-  async createBoxingSession(session: CreateBoxingSessionRequest, userId: string): Promise<BoxingSessionResponse> {
-    const [created] = await db.insert(boxingSessions).values({ ...session, userId }).returning();
+  async createBoxingSession(session: CreateBoxingSessionRequest, user: UserIdentity): Promise<BoxingSessionResponse> {
+    const [created] = await db.insert(boxingSessions).values({
+      ...session,
+      userId: user.id,
+      userEmail: user.email,
+      userName: user.name,
+    }).returning();
     return created;
   }
 
