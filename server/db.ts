@@ -38,6 +38,8 @@ export async function ensureSchema() {
       );
       CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
     `);
+    // Drop old unused entries table if it still exists
+    await client.query(`DROP TABLE IF EXISTS entries;`);
     // BMI entries table
     await client.query(`
       CREATE TABLE IF NOT EXISTS bmi_entries (
