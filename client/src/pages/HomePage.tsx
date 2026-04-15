@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Menu, Activity, Dumbbell, History, Home, Play, TrendingUp, Award,
-  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut, ShieldCheck,
+  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut, ShieldCheck, Mail,
 } from "lucide-react";
 import type { WorkoutSession } from "@shared/schema";
 import type { BMIProfile } from "@/pages/BMIPage";
@@ -139,6 +139,19 @@ export default function HomePage() {
                   </Button>
                 ))}
               </nav>
+              {/* Support */}
+              <div className="border-t border-white/10 pt-3 mt-2 space-y-1">
+                <p className="px-3 text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Support</p>
+                <a
+                  href="mailto:learnandburn.lab.support@gmail.com"
+                  className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                  data-testid="link-support-email"
+                >
+                  <Mail className="w-5 h-5 text-zinc-400 shrink-0" />
+                  <span className="truncate">learnandburn.lab.support@gmail.com</span>
+                </a>
+              </div>
+
               <div className="border-t border-white/10 pt-3 mt-2">
                 <Button
                   variant="ghost"
@@ -350,16 +363,15 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 py-4 text-center">
-        <p className="text-zinc-600 text-xs">
-          Support:{" "}
-          <a
-            href="mailto:learnandburn.lab.support@gmail.com"
-            className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
-          >
-            learnandburn.lab.support@gmail.com
-          </a>
-        </p>
+      <footer className="border-t border-gray-800 py-5 text-center">
+        <p className="text-zinc-400 text-sm font-medium">Need help?</p>
+        <a
+          href="mailto:learnandburn.lab.support@gmail.com"
+          className="inline-flex items-center gap-1.5 mt-1 text-sm text-red-400 hover:text-red-300 transition-colors font-medium"
+        >
+          <Mail className="w-4 h-4" />
+          learnandburn.lab.support@gmail.com
+        </a>
       </footer>
     </div>
   );

@@ -77,15 +77,13 @@ export default function LoginPage() {
 
       {/* Footer */}
       <footer className="w-full text-center pt-6">
-        <p className="text-zinc-600 text-xs">
-          Support:{" "}
-          <a
-            href="mailto:learnandburn.lab.support@gmail.com"
-            className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
-          >
-            learnandburn.lab.support@gmail.com
-          </a>
-        </p>
+        <p className="text-zinc-400 text-sm font-medium">Need help?</p>
+        <a
+          href="mailto:learnandburn.lab.support@gmail.com"
+          className="inline-flex items-center gap-1.5 mt-1 text-sm text-red-400 hover:text-red-300 transition-colors font-medium"
+        >
+          learnandburn.lab.support@gmail.com
+        </a>
       </footer>
     </div>
   );
