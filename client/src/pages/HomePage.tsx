@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Menu, Activity, Dumbbell, History, Home, Play, TrendingUp, Award,
-  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut,
+  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut, ShieldCheck,
 } from "lucide-react";
 import type { WorkoutSession } from "@shared/schema";
 import type { BMIProfile } from "@/pages/BMIPage";
@@ -82,12 +82,15 @@ export default function HomePage() {
     plank: s.exerciseType === "plank" ? s.completedReps : undefined,
   }));
 
+  const isAdmin = user?.email?.toLowerCase() === "mohammednv23158@gmail.com";
+
   const menuItems = [
     { icon: Home, label: "Home", path: "/" },
     { icon: Play, label: "Start Workout", path: "/select-exercise" },
     { icon: Gamepad2, label: "Game Mode", path: "/game" },
     { icon: Zap, label: "Boxing Mode", path: "/boxing" },
     { icon: User, label: "BMI Profile", path: "/bmi" },
+    ...(isAdmin ? [{ icon: ShieldCheck, label: "Admin Panel", path: "/admin" }] : []),
   ];
 
   return (

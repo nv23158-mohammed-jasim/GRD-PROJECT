@@ -136,5 +136,20 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // === ADMIN ROUTES — restricted to admin email only ===
+  const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "mohammednv23158@gmail.com")
+    .split(",").map(e => e.trim().toLowerCase());
+
+  app.get("/api/admin/search", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const search = String(req.query.search || "");
+    const table = String(req.query.table || "all");
+    const results = await storage.adminSearch(search, table);
+    res.json(results);
+  });
+
   return httpServer;
 }

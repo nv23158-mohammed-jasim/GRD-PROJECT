@@ -23,6 +23,16 @@ interface UserIdentity {
   name: string;
 }
 
+export interface AdminRecord {
+  id: number;
+  userId: string | null;
+  userEmail: string | null;
+  userName: string | null;
+  date: Date;
+  table: string;
+  details: Record<string, unknown>;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | null>;
@@ -45,6 +55,9 @@ export interface IStorage {
   getBoxingSessions(userId: string): Promise<BoxingSessionResponse[]>;
   createBoxingSession(session: CreateBoxingSessionRequest, user: UserIdentity): Promise<BoxingSessionResponse>;
   deleteBoxingSession(id: number, userId: string): Promise<void>;
+
+  // Admin methods
+  adminSearch(search: string, table: string): Promise<unknown[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -131,6 +144,44 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBoxingSession(id: number, userId: string): Promise<void> {
     await db.delete(boxingSessions).where(and(eq(boxingSessions.id, id), eq(boxingSessions.userId, userId)));
+  }
+
+  async adminSearch(search: string, table: string): Promise<unknown[]> {
+    const { pool } = await import("./db");
+    const like = `%${search}%`;
+    const where = search
+      ? `WHERE (COALESCE(t.user_email, u.email) ILIKE $1 OR COALESCE(t.user_name, u.name) ILIKE $1)`
+      : `WHERE 1=1`;
+    const params = search ? [like] : [];
+
+    const queries: Record<string, string> = {
+      bmi: `
+        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
+               'bmi' AS record_type
+        FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
+      workout: `
+        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
+               'workout' AS record_type
+        FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
+      game: `
+        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
+               'game' AS record_type
+        FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
+      boxing: `
+        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
+               'boxing' AS record_type
+        FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
+    };
+
+    const tables = table === "all" ? ["bmi", "workout", "game", "boxing"] : [table];
+    const results: unknown[] = [];
+    for (const t of tables) {
+      if (queries[t]) {
+        const res = await pool.query(queries[t], params);
+        results.push(...res.rows);
+      }
+    }
+    return results;
   }
 }
 
