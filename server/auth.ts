@@ -19,7 +19,10 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.SESSION_SECRET || "lab-secret-fallback";
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET environment variable must be set");
+}
+const JWT_SECRET = process.env.SESSION_SECRET;
 
 export function getJwtSecret() {
   return JWT_SECRET;
