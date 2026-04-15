@@ -3,8 +3,16 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { getUserFromToken } from "./auth";
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  // Check JWT Authorization header first (works on iOS Safari / cross-origin)
+  const tokenUser = await getUserFromToken(req);
+  if (tokenUser) {
+    req.user = tokenUser;
+    return next();
+  }
+  // Fall back to session-based auth
   if (req.isAuthenticated() && req.user) {
     return next();
   }

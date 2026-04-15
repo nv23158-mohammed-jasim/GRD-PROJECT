@@ -2,6 +2,23 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL as string) || "";
 
+export function getAuthToken(): string | null {
+  return localStorage.getItem("auth_token");
+}
+
+export function setAuthToken(token: string) {
+  localStorage.setItem("auth_token", token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem("auth_token");
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -16,7 +33,10 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(API_BASE_URL + url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...getAuthHeaders(),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -33,6 +53,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const res = await fetch(API_BASE_URL + (queryKey.join("/") as string), {
       credentials: "include",
+      headers: getAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
