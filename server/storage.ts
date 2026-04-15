@@ -152,12 +152,19 @@ export class DatabaseStorage implements IStorage {
     let total = 0;
     const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
     for (const t of tables) {
-      const res = await pool.query(`
-        UPDATE ${t} SET user_email = u.email, user_name = u.name
-        FROM users u
-        WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
-      `);
-      total += res.rowCount || 0;
+      // First ensure the columns exist, then backfill
+      try {
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_email varchar(255)`);
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name varchar(255)`);
+        const res = await pool.query(`
+          UPDATE ${t} SET user_email = u.email, user_name = u.name
+          FROM users u
+          WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
+        `);
+        total += res.rowCount || 0;
+      } catch (err) {
+        console.error(`[adminBackfill] failed for table "${t}":`, err);
+      }
     }
     return { updated: total };
   }
@@ -165,27 +172,25 @@ export class DatabaseStorage implements IStorage {
   async adminSearch(search: string, table: string): Promise<unknown[]> {
     const { pool } = await import("./db");
     const like = `%${search}%`;
+    // Only search on the joined users table — avoids referencing optional columns that may not exist yet
     const where = search
-      ? `WHERE (COALESCE(t.user_email, u.email) ILIKE $1 OR COALESCE(t.user_name, u.name) ILIKE $1)`
-      : `WHERE 1=1`;
+      ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1)`
+      : ``;
     const params = search ? [like] : [];
 
+    // u.email / u.name come from the JOIN — no dependency on optional table columns
     const queries: Record<string, string> = {
       bmi: `
-        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
-               'bmi' AS record_type
+        SELECT t.*, u.email AS user_email, u.name AS user_name, 'bmi' AS record_type
         FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       workout: `
-        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
-               'workout' AS record_type
+        SELECT t.*, u.email AS user_email, u.name AS user_name, 'workout' AS record_type
         FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       game: `
-        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
-               'game' AS record_type
+        SELECT t.*, u.email AS user_email, u.name AS user_name, 'game' AS record_type
         FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       boxing: `
-        SELECT t.*, COALESCE(t.user_email, u.email) AS user_email, COALESCE(t.user_name, u.name) AS user_name,
-               'boxing' AS record_type
+        SELECT t.*, u.email AS user_email, u.name AS user_name, 'boxing' AS record_type
         FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
     };
 
