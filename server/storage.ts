@@ -193,8 +193,12 @@ export class DatabaseStorage implements IStorage {
     const results: unknown[] = [];
     for (const t of tables) {
       if (queries[t]) {
-        const res = await pool.query(queries[t], params);
-        results.push(...res.rows);
+        try {
+          const res = await pool.query(queries[t], params);
+          results.push(...res.rows);
+        } catch (err) {
+          console.error(`[adminSearch] query failed for table "${t}":`, err);
+        }
       }
     }
     return results;

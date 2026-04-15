@@ -110,28 +110,27 @@ export async function ensureSchema() {
     await client.query(`
       ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS intensity integer NOT NULL DEFAULT 2;
     `);
-    // Add user_email and user_name columns to all session tables (for admin visibility in Neon)
-    await client.query(`
-      ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_email varchar(255);
-      ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_name varchar(255);
-      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
-      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
-      ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
-      ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
-      ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
-      ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
-    `);
-    // Backfill user_email and user_name from the users table for any rows that are still NULL
-    await client.query(`
-      UPDATE bmi_entries SET user_email = u.email, user_name = u.name
-        FROM users u WHERE bmi_entries.user_id = u.id AND bmi_entries.user_email IS NULL;
-      UPDATE workout_sessions SET user_email = u.email, user_name = u.name
-        FROM users u WHERE workout_sessions.user_id = u.id AND workout_sessions.user_email IS NULL;
-      UPDATE game_sessions SET user_email = u.email, user_name = u.name
-        FROM users u WHERE game_sessions.user_id = u.id AND game_sessions.user_email IS NULL;
-      UPDATE boxing_sessions SET user_email = u.email, user_name = u.name
-        FROM users u WHERE boxing_sessions.user_id = u.id AND boxing_sessions.user_email IS NULL;
-    `);
+    // Add user_email and user_name columns — each as a SEPARATE query so all run even if one stalls
+    const addCols = [
+      `ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+      `ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+      `ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+    ];
+    for (const q of addCols) await client.query(q);
+
+    // Backfill — each table as its own query
+    const backfillTables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
+    for (const t of backfillTables) {
+      await client.query(`
+        UPDATE ${t} SET user_email = u.email, user_name = u.name
+          FROM users u WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
+      `);
+    }
   } catch (err) {
     console.error("[db] Schema migration warning:", err);
   } finally {
