@@ -121,6 +121,17 @@ export async function ensureSchema() {
       ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255);
       ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255);
     `);
+    // Backfill user_email and user_name from the users table for any rows that are still NULL
+    await client.query(`
+      UPDATE bmi_entries SET user_email = u.email, user_name = u.name
+        FROM users u WHERE bmi_entries.user_id = u.id AND bmi_entries.user_email IS NULL;
+      UPDATE workout_sessions SET user_email = u.email, user_name = u.name
+        FROM users u WHERE workout_sessions.user_id = u.id AND workout_sessions.user_email IS NULL;
+      UPDATE game_sessions SET user_email = u.email, user_name = u.name
+        FROM users u WHERE game_sessions.user_id = u.id AND game_sessions.user_email IS NULL;
+      UPDATE boxing_sessions SET user_email = u.email, user_name = u.name
+        FROM users u WHERE boxing_sessions.user_id = u.id AND boxing_sessions.user_email IS NULL;
+    `);
   } catch (err) {
     console.error("[db] Schema migration warning:", err);
   } finally {
