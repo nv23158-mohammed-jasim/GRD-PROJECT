@@ -172,49 +172,39 @@ export class DatabaseStorage implements IStorage {
   async adminSearch(search: string, table: string): Promise<unknown[]> {
     const { pool } = await import("./db");
 
-    // Ensure user_email / user_name columns exist on every table before querying.
-    // ADD COLUMN IF NOT EXISTS is a fast no-op when the column is already there.
-    const allTables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
-    for (const tbl of allTables) {
-      await pool.query(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS user_email varchar(255)`).catch(() => {});
-      await pool.query(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS user_name  varchar(255)`).catch(() => {});
-    }
-
     const like = `%${search}%`;
-    // Search across both the stored value (t.user_email) and the live JOIN value (u.email)
+    // Only filter on guaranteed columns (users table via JOIN — always exists)
     const where = search
-      ? `WHERE (COALESCE(t.user_email, u.email, '') ILIKE $1 OR COALESCE(t.user_name, u.name, '') ILIKE $1)`
+      ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1 OR CAST(t.user_id AS TEXT) ILIKE $1)`
       : ``;
     const params = search ? [like] : [];
 
+    // Only use columns guaranteed to exist on every version of these tables.
+    // user_email / user_name come ONLY from the JOIN — no optional table columns.
     const queries: Record<string, string> = {
       bmi: `
         SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
                t.gender, t.activity_level, t.suggested_difficulty, t.date,
-               COALESCE(t.user_email, u.email) AS user_email,
-               COALESCE(t.user_name,  u.name)  AS user_name,
+               u.email AS user_email, u.name AS user_name,
                'bmi' AS record_type
         FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       workout: `
         SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
                t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
-               COALESCE(t.user_email, u.email) AS user_email,
-               COALESCE(t.user_name,  u.name)  AS user_name,
+               u.email AS user_email, u.name AS user_name,
                'workout' AS record_type
         FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       game: `
         SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
                t.completed, t.time_played, t.date,
-               COALESCE(t.user_email, u.email) AS user_email,
-               COALESCE(t.user_name,  u.name)  AS user_name,
+               u.email AS user_email, u.name AS user_name,
                'game' AS record_type
         FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       boxing: `
         SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
                t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
                t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
-               COALESCE(t.user_email, u.email) AS user_email,
-               COALESCE(t.user_name,  u.name)  AS user_name,
+               u.email AS user_email, u.name AS user_name,
                'boxing' AS record_type
         FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
     };
