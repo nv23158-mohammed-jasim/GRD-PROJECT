@@ -178,19 +178,28 @@ export class DatabaseStorage implements IStorage {
       : ``;
     const params = search ? [like] : [];
 
-    // u.email / u.name come from the JOIN — no dependency on optional table columns
+    // Explicit column lists — avoids duplicate-column issues when t.* overlaps with our aliases
     const queries: Record<string, string> = {
       bmi: `
-        SELECT t.*, u.email AS user_email, u.name AS user_name, 'bmi' AS record_type
+        SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
+               t.gender, t.activity_level, t.suggested_difficulty, t.date,
+               u.email AS user_email, u.name AS user_name, 'bmi' AS record_type
         FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       workout: `
-        SELECT t.*, u.email AS user_email, u.name AS user_name, 'workout' AS record_type
+        SELECT t.id, t.user_id, t.exercise_type, t.difficulty, t.intensity,
+               t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
+               u.email AS user_email, u.name AS user_name, 'workout' AS record_type
         FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       game: `
-        SELECT t.*, u.email AS user_email, u.name AS user_name, 'game' AS record_type
+        SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
+               t.completed, t.time_played, t.date,
+               u.email AS user_email, u.name AS user_name, 'game' AS record_type
         FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       boxing: `
-        SELECT t.*, u.email AS user_email, u.name AS user_name, 'boxing' AS record_type
+        SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
+               t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
+               t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
+               u.email AS user_email, u.name AS user_name, 'boxing' AS record_type
         FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
     };
 
