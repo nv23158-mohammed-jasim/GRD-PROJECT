@@ -88,6 +88,13 @@ export default function AdminPage() {
     enabled: isAdmin,
   });
 
+  const { data: counts } = useQuery<Record<string, number | string>>({
+    queryKey: ["/api/admin/counts"],
+    queryFn: () => apiRequest("GET", "/api/admin/counts").then(r => r.json()),
+    enabled: isAdmin,
+    staleTime: 30_000,
+  });
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -131,6 +138,18 @@ export default function AdminPage() {
           </span>
         </div>
       </div>
+
+      {/* DB totals bar — shows real counts directly from the database */}
+      {counts && (
+        <div className="border-b border-gray-800 bg-gray-950 px-4 py-2 flex items-center gap-4 text-xs text-gray-400 flex-wrap">
+          <span className="font-semibold text-gray-300">DB totals:</span>
+          <span>BMI <strong className="text-purple-400">{counts.bmi}</strong></span>
+          <span>Workout <strong className="text-red-400">{counts.workout}</strong></span>
+          <span>Neon Run <strong className="text-blue-400">{counts.game}</strong></span>
+          <span>Boxing <strong className="text-orange-400">{counts.boxing}</strong></span>
+          <span>Users <strong className="text-green-400">{counts.users}</strong></span>
+        </div>
+      )}
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
         {/* Search */}

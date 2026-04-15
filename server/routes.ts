@@ -160,5 +160,30 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  // Raw counts — bypasses all JOINs / COALESCE to show true DB totals
+  app.get("/api/admin/counts", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const { pool } = await import("./db");
+    const counts: Record<string, number | string> = {};
+    for (const [key, tbl] of [
+      ["bmi", "bmi_entries"],
+      ["workout", "workout_sessions"],
+      ["game", "game_sessions"],
+      ["boxing", "boxing_sessions"],
+      ["users", "users"],
+    ] as [string, string][]) {
+      try {
+        const r = await pool.query(`SELECT COUNT(*) AS n FROM ${tbl}`);
+        counts[key] = Number(r.rows[0].n);
+      } catch (e: unknown) {
+        counts[key] = `error: ${e instanceof Error ? e.message : String(e)}`;
+      }
+    }
+    res.json(counts);
+  });
+
   return httpServer;
 }
