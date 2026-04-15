@@ -147,6 +147,32 @@ export class DatabaseStorage implements IStorage {
     await db.delete(boxingSessions).where(and(eq(boxingSessions.id, id), eq(boxingSessions.userId, userId)));
   }
 
+  async adminClaimOrphans(adminId: string): Promise<{ claimed: number; detail: Record<string, unknown>; backfill: unknown }> {
+    const { pool } = await import("./db");
+    let total = 0;
+    const detail: Record<string, unknown> = {};
+    const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
+    for (const t of tables) {
+      try {
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id varchar`).catch(() => {});
+        const before = Number(
+          (await pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_id IS NULL`)).rows[0].n
+        );
+        const res = await pool.query(
+          `UPDATE ${t} SET user_id = $1 WHERE user_id IS NULL`,
+          [adminId]
+        );
+        const claimed = res.rowCount || 0;
+        total += claimed;
+        detail[t] = { orphansBefore: before, claimed };
+      } catch (err) {
+        detail[t] = { error: String(err) };
+      }
+    }
+    const backfill = await this.adminBackfill();
+    return { claimed: total, detail, backfill };
+  }
+
   async adminBackfill(): Promise<{ updated: number; detail: Record<string, unknown> }> {
     const { pool } = await import("./db");
     let total = 0;

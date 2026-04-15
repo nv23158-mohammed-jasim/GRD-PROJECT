@@ -160,6 +160,15 @@ export async function registerRoutes(
     res.json(result);
   });
 
+  app.post("/api/admin/claim-orphans", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const result = await storage.adminClaimOrphans(u.id);
+    res.json(result);
+  });
+
   // Raw counts — bypasses all JOINs / COALESCE to show true DB totals
   app.get("/api/admin/counts", requireAuth, async (req, res) => {
     const u = userIdentity(req);

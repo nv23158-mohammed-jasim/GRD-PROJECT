@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw } from "lucide-react";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -89,6 +89,24 @@ export default function AdminPage() {
     onError: () => toast({ title: "Backfill failed", variant: "destructive" }),
   });
 
+  const claimMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/claim-orphans").then(r => r.json()),
+    onSuccess: (data: { claimed: number; detail: Record<string, Record<string, unknown>>; backfill: { updated: number } }) => {
+      const lines = Object.entries(data.detail || {}).map(([tbl, d]) => {
+        const info = d as Record<string, unknown>;
+        if (info.error) return `${tbl}: ERROR — ${info.error}`;
+        return `${tbl}: ${info.orphansBefore} orphans → claimed ${info.claimed}`;
+      });
+      toast({
+        title: `Claimed ${data.claimed} orphan records + backfilled ${data.backfill?.updated ?? 0}`,
+        description: lines.join("\n"),
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
+    },
+    onError: () => toast({ title: "Claim failed", variant: "destructive" }),
+  });
+
   const { data: records = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ["/api/admin/search", activeSearch, table],
     queryFn: () =>
@@ -131,6 +149,18 @@ export default function AdminPage() {
         </button>
         <h1 className="text-lg font-bold text-red-500">Admin Panel</h1>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            data-testid="button-claim-orphans"
+            size="sm"
+            variant="outline"
+            className="border-green-700 text-green-400 hover:bg-green-900/30 gap-1.5 text-xs"
+            onClick={() => claimMutation.mutate()}
+            disabled={claimMutation.isPending}
+            title="Assign all records with no owner to your account, then fill in names/emails"
+          >
+            <UserCheck size={13} className={claimMutation.isPending ? "animate-spin" : ""} />
+            {claimMutation.isPending ? "Claiming…" : "Claim My Records"}
+          </Button>
           <Button
             data-testid="button-backfill"
             size="sm"
