@@ -73,9 +73,18 @@ export default function AdminPage() {
 
   const backfillMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/backfill").then(r => r.json()),
-    onSuccess: (data: { updated: number }) => {
-      toast({ title: `Backfill complete — ${data.updated} rows updated` });
+    onSuccess: (data: { updated: number; detail: Record<string, Record<string, unknown>> }) => {
+      const lines = Object.entries(data.detail || {}).map(([tbl, d]) => {
+        const info = d as Record<string, unknown>;
+        if (info.error) return `${tbl}: ERROR — ${info.error}`;
+        return `${tbl}: ${info.nullBefore} null → updated ${info.updated} → ${info.stillNull} remaining`;
+      });
+      toast({
+        title: `Backfill complete — ${data.updated} rows updated`,
+        description: lines.join("\n"),
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
     },
     onError: () => toast({ title: "Backfill failed", variant: "destructive" }),
   });

@@ -123,13 +123,16 @@ export async function ensureSchema() {
     ];
     for (const q of addCols) await client.query(q);
 
-    // Backfill — each table as its own query
+    // Backfill — correlated subquery avoids JOIN mismatch issues
     const backfillTables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
     for (const t of backfillTables) {
       await client.query(`
-        UPDATE ${t} SET user_email = u.email, user_name = u.name
-          FROM users u WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
-      `);
+        UPDATE ${t}
+        SET
+          user_email = (SELECT email FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1),
+          user_name  = (SELECT name  FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1)
+        WHERE user_email IS NULL OR user_name IS NULL
+      `).catch(err => console.error(`[ensureSchema] backfill failed for ${t}:`, err));
     }
   } catch (err) {
     console.error("[db] Schema migration warning:", err);

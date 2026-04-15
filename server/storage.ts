@@ -58,7 +58,7 @@ export interface IStorage {
 
   // Admin methods
   adminSearch(search: string, table: string): Promise<unknown[]>;
-  adminBackfill(): Promise<{ updated: number }>;
+  adminBackfill(): Promise<{ updated: number; detail: Record<string, unknown> }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -147,26 +147,44 @@ export class DatabaseStorage implements IStorage {
     await db.delete(boxingSessions).where(and(eq(boxingSessions.id, id), eq(boxingSessions.userId, userId)));
   }
 
-  async adminBackfill(): Promise<{ updated: number }> {
+  async adminBackfill(): Promise<{ updated: number; detail: Record<string, unknown> }> {
     const { pool } = await import("./db");
     let total = 0;
+    const detail: Record<string, unknown> = {};
     const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
     for (const t of tables) {
-      // First ensure the columns exist, then backfill
       try {
         await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_email varchar(255)`);
         await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name varchar(255)`);
+
+        // Count rows that still need backfilling
+        const needsUpdate = await pool.query(
+          `SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`
+        );
+        const nullBefore = Number(needsUpdate.rows[0].n);
+
+        // Use correlated subquery — works even if user_id is cast differently
         const res = await pool.query(`
-          UPDATE ${t} SET user_email = u.email, user_name = u.name
-          FROM users u
-          WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
+          UPDATE ${t}
+          SET
+            user_email = (SELECT email FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1),
+            user_name  = (SELECT name  FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1)
+          WHERE user_email IS NULL OR user_name IS NULL
         `);
-        total += res.rowCount || 0;
+        const updated = res.rowCount || 0;
+        total += updated;
+
+        // Count how many are still NULL after update
+        const stillNull = await pool.query(
+          `SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`
+        );
+        detail[t] = { nullBefore, updated, stillNull: Number(stillNull.rows[0].n) };
       } catch (err) {
         console.error(`[adminBackfill] failed for table "${t}":`, err);
+        detail[t] = { error: String(err) };
       }
     }
-    return { updated: total };
+    return { updated: total, detail };
   }
 
   async adminSearch(search: string, table: string): Promise<unknown[]> {
