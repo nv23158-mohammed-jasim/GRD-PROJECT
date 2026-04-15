@@ -186,7 +186,7 @@ export class DatabaseStorage implements IStorage {
                u.email AS user_email, u.name AS user_name, 'bmi' AS record_type
         FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
       workout: `
-        SELECT t.id, t.user_id, t.exercise_type, t.difficulty, t.intensity,
+        SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
                t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
                u.email AS user_email, u.name AS user_name, 'workout' AS record_type
         FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
