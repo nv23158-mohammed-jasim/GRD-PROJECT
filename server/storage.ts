@@ -154,34 +154,33 @@ export class DatabaseStorage implements IStorage {
     const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
     for (const t of tables) {
       try {
-        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id    varchar`);
-        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_email varchar(255)`);
-        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name  varchar(255)`);
+        // Ensure all needed columns exist first
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id    varchar`).catch(() => {});
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_email varchar(255)`).catch(() => {});
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name  varchar(255)`).catch(() => {});
 
-        // Count rows that still need backfilling
-        const needsUpdate = await pool.query(
-          `SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`
+        const nullBefore = Number(
+          (await pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`)).rows[0].n
         );
-        const nullBefore = Number(needsUpdate.rows[0].n);
 
-        // Use correlated subquery — works even if user_id is cast differently
+        // JOIN UPDATE — simplest and most reliable form in PostgreSQL
         const res = await pool.query(`
-          UPDATE ${t}
-          SET
-            user_email = (SELECT email FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1),
-            user_name  = (SELECT name  FROM users WHERE CAST(id AS TEXT) = CAST(${t}.user_id AS TEXT) LIMIT 1)
-          WHERE user_email IS NULL OR user_name IS NULL
+          UPDATE ${t} AS tbl
+          SET user_email = u.email,
+              user_name  = u.name
+          FROM users u
+          WHERE tbl.user_id = u.id
+            AND (tbl.user_email IS NULL OR tbl.user_name IS NULL)
         `);
         const updated = res.rowCount || 0;
         total += updated;
 
-        // Count how many are still NULL after update
-        const stillNull = await pool.query(
-          `SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`
+        const stillNull = Number(
+          (await pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_email IS NULL OR user_name IS NULL`)).rows[0].n
         );
-        detail[t] = { nullBefore, updated, stillNull: Number(stillNull.rows[0].n) };
+        detail[t] = { nullBefore, updated, stillNull };
       } catch (err) {
-        console.error(`[adminBackfill] failed for table "${t}":`, err);
+        console.error(`[adminBackfill] failed for "${t}":`, err);
         detail[t] = { error: String(err) };
       }
     }
@@ -192,101 +191,85 @@ export class DatabaseStorage implements IStorage {
     const { pool } = await import("./db");
 
     const like = `%${search}%`;
-    const searchWhere = search
-      ? `WHERE (COALESCE(t.user_email, u.email, '') ILIKE $1 OR COALESCE(t.user_name, u.name, '') ILIKE $1)`
-      : ``;
-    const searchWhereFallback = search
-      ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1)`
-      : ``;
     const params = search ? [like] : [];
 
-    // Primary queries: use COALESCE(stored, joined) so backfilled values show even for users not in `users` table
-    // Fallback queries: join-only, used if the table is missing user_email/user_name columns
-    type TableQueries = { primary: string; fallback: string };
-    const queries: Record<string, TableQueries> = {
+    // Three-tier query strategy per table:
+    // 1. Primary  — COALESCE(stored user_email, joined u.email) + JOIN on user_id
+    // 2. Fallback — JOIN only (no stored columns)
+    // 3. Nuclear  — no JOIN, no optional columns; always returns all rows
+    const sw  = search ? `WHERE (COALESCE(t.user_email, u.email, '') ILIKE $1 OR COALESCE(t.user_name, u.name, '') ILIKE $1)` : ``;
+    const swF = search ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1)` : ``;
+
+    type TQ = { primary: string; fallback: string; nuclear: string };
+    const queries: Record<string, TQ> = {
       bmi: {
-        primary: `
-          SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
-                 t.gender, t.activity_level, t.suggested_difficulty, t.date,
-                 COALESCE(t.user_email, u.email) AS user_email,
-                 COALESCE(t.user_name,  u.name)  AS user_name,
-                 'bmi' AS record_type
-          FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
-        fallback: `
-          SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
-                 t.gender, t.activity_level, t.suggested_difficulty, t.date,
-                 u.email AS user_email, u.name AS user_name,
-                 'bmi' AS record_type
-          FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+        primary: `SELECT t.id,t.user_id,t.age,t.height_cm,t.weight_kg,t.bmi,t.category,t.gender,t.activity_level,t.suggested_difficulty,t.date,
+                   COALESCE(t.user_email,u.email) AS user_email,COALESCE(t.user_name,u.name) AS user_name,'bmi' AS record_type
+                  FROM bmi_entries t LEFT JOIN users u ON t.user_id=u.id ${sw} ORDER BY t.date DESC`,
+        fallback: `SELECT t.id,t.user_id,t.age,t.height_cm,t.weight_kg,t.bmi,t.category,t.gender,t.activity_level,t.suggested_difficulty,t.date,
+                   u.email AS user_email,u.name AS user_name,'bmi' AS record_type
+                  FROM bmi_entries t LEFT JOIN users u ON t.user_id=u.id ${swF} ORDER BY t.date DESC`,
+        nuclear:  `SELECT id,NULL::varchar AS user_id,age,height_cm,weight_kg,bmi,category,gender,activity_level,suggested_difficulty,date,
+                   NULL::varchar AS user_email,NULL::varchar AS user_name,'bmi' AS record_type
+                  FROM bmi_entries ORDER BY date DESC`,
       },
       workout: {
-        primary: `
-          SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
-                 t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
-                 COALESCE(t.user_email, u.email) AS user_email,
-                 COALESCE(t.user_name,  u.name)  AS user_name,
-                 'workout' AS record_type
-          FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
-        fallback: `
-          SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
-                 t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
-                 u.email AS user_email, u.name AS user_name,
-                 'workout' AS record_type
-          FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+        primary: `SELECT t.id,t.user_id,t.exercise_type,t.difficulty,t.target_reps,t.completed_reps,t.time_limit,t.time_taken,t.grade,t.date,
+                   COALESCE(t.user_email,u.email) AS user_email,COALESCE(t.user_name,u.name) AS user_name,'workout' AS record_type
+                  FROM workout_sessions t LEFT JOIN users u ON t.user_id=u.id ${sw} ORDER BY t.date DESC`,
+        fallback: `SELECT t.id,t.user_id,t.exercise_type,t.difficulty,t.target_reps,t.completed_reps,t.time_limit,t.time_taken,t.grade,t.date,
+                   u.email AS user_email,u.name AS user_name,'workout' AS record_type
+                  FROM workout_sessions t LEFT JOIN users u ON t.user_id=u.id ${swF} ORDER BY t.date DESC`,
+        nuclear:  `SELECT id,NULL::varchar AS user_id,exercise_type,difficulty,target_reps,completed_reps,time_limit,time_taken,grade,date,
+                   NULL::varchar AS user_email,NULL::varchar AS user_name,'workout' AS record_type
+                  FROM workout_sessions ORDER BY date DESC`,
       },
       game: {
-        primary: `
-          SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
-                 t.completed, t.time_played, t.date,
-                 COALESCE(t.user_email, u.email) AS user_email,
-                 COALESCE(t.user_name,  u.name)  AS user_name,
-                 'game' AS record_type
-          FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
-        fallback: `
-          SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
-                 t.completed, t.time_played, t.date,
-                 u.email AS user_email, u.name AS user_name,
-                 'game' AS record_type
-          FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+        primary: `SELECT t.id,t.user_id,t.difficulty,t.stage,t.score,t.target_score,t.completed,t.time_played,t.date,
+                   COALESCE(t.user_email,u.email) AS user_email,COALESCE(t.user_name,u.name) AS user_name,'game' AS record_type
+                  FROM game_sessions t LEFT JOIN users u ON t.user_id=u.id ${sw} ORDER BY t.date DESC`,
+        fallback: `SELECT t.id,t.user_id,t.difficulty,t.stage,t.score,t.target_score,t.completed,t.time_played,t.date,
+                   u.email AS user_email,u.name AS user_name,'game' AS record_type
+                  FROM game_sessions t LEFT JOIN users u ON t.user_id=u.id ${swF} ORDER BY t.date DESC`,
+        nuclear:  `SELECT id,NULL::varchar AS user_id,difficulty,stage,score,target_score,completed,time_played,date,
+                   NULL::varchar AS user_email,NULL::varchar AS user_name,'game' AS record_type
+                  FROM game_sessions ORDER BY date DESC`,
       },
       boxing: {
-        primary: `
-          SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
-                 t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
-                 t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
-                 COALESCE(t.user_email, u.email) AS user_email,
-                 COALESCE(t.user_name,  u.name)  AS user_name,
-                 'boxing' AS record_type
-          FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
-        fallback: `
-          SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
-                 t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
-                 t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
-                 u.email AS user_email, u.name AS user_name,
-                 'boxing' AS record_type
-          FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+        primary: `SELECT t.id,t.user_id,t.difficulty,t.round,t.total_rounds,t.score,t.punches_landed,t.punches_missed,t.dodges_successful,t.dodges_missed,t.blocks_successful,t.blocks_missed,t.completed,t.time_played,t.date,
+                   COALESCE(t.user_email,u.email) AS user_email,COALESCE(t.user_name,u.name) AS user_name,'boxing' AS record_type
+                  FROM boxing_sessions t LEFT JOIN users u ON t.user_id=u.id ${sw} ORDER BY t.date DESC`,
+        fallback: `SELECT t.id,t.user_id,t.difficulty,t.round,t.total_rounds,t.score,t.punches_landed,t.punches_missed,t.dodges_successful,t.dodges_missed,t.blocks_successful,t.blocks_missed,t.completed,t.time_played,t.date,
+                   u.email AS user_email,u.name AS user_name,'boxing' AS record_type
+                  FROM boxing_sessions t LEFT JOIN users u ON t.user_id=u.id ${swF} ORDER BY t.date DESC`,
+        nuclear:  `SELECT id,NULL::varchar AS user_id,difficulty,round,total_rounds,score,punches_landed,punches_missed,dodges_successful,dodges_missed,blocks_successful,blocks_missed,completed,time_played,date,
+                   NULL::varchar AS user_email,NULL::varchar AS user_name,'boxing' AS record_type
+                  FROM boxing_sessions ORDER BY date DESC`,
       },
     };
 
-    const tables = table === "all" ? ["bmi", "workout", "game", "boxing"] : [table];
+    const tablesToQuery = table === "all" ? ["bmi", "workout", "game", "boxing"] : [table];
     const results: unknown[] = [];
-    for (const t of tables) {
-      if (queries[t]) {
+    for (const t of tablesToQuery) {
+      const q = queries[t];
+      if (!q) continue;
+      let rows: unknown[] = [];
+      try {
+        rows = (await pool.query(q.primary, params)).rows;
+      } catch {
         try {
-          // Try COALESCE version first (shows stored names even for users not in `users` table)
-          const res = await pool.query(queries[t].primary, params);
-          results.push(...res.rows);
+          console.warn(`[adminSearch] primary failed for "${t}", trying fallback`);
+          rows = (await pool.query(q.fallback, params)).rows;
         } catch {
           try {
-            // Fall back to JOIN-only if the stored columns don't exist yet
-            console.warn(`[adminSearch] primary query failed for "${t}", trying fallback`);
-            const res = await pool.query(queries[t].fallback, params);
-            results.push(...res.rows);
-          } catch (err2) {
-            console.error(`[adminSearch] both queries failed for "${t}":`, err2);
+            console.warn(`[adminSearch] fallback failed for "${t}", using nuclear`);
+            rows = (await pool.query(q.nuclear)).rows;  // nuclear ignores search filter
+          } catch (err3) {
+            console.error(`[adminSearch] all queries failed for "${t}":`, err3);
           }
         }
       }
+      results.push(...rows);
     }
     return results;
   }
