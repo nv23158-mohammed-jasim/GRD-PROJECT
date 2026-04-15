@@ -38,14 +38,19 @@ export async function ensureSchema() {
       );
       CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
     `);
-    // Entries table
+    // BMI entries table
     await client.query(`
-      CREATE TABLE IF NOT EXISTS entries (
+      CREATE TABLE IF NOT EXISTS bmi_entries (
         id serial PRIMARY KEY,
-        user_id varchar,
-        steps integer NOT NULL,
-        calories integer NOT NULL,
-        weight decimal(5,2) NOT NULL,
+        user_id varchar NOT NULL,
+        age integer NOT NULL,
+        height_cm decimal(5,1) NOT NULL,
+        weight_kg decimal(5,1) NOT NULL,
+        bmi decimal(4,1) NOT NULL,
+        category varchar(20) NOT NULL,
+        gender varchar(10) NOT NULL,
+        activity_level varchar(20) NOT NULL,
+        suggested_difficulty varchar(10) NOT NULL,
         date timestamp DEFAULT now() NOT NULL
       );
     `);
