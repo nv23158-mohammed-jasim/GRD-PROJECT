@@ -15,62 +15,78 @@ export default function LoginPage() {
   }, [isLoading, isAuthenticated, navigate]);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md flex flex-col items-center gap-8">
-        {/* Logo / Brand */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-20 h-20 rounded-2xl bg-red-600 flex items-center justify-center shadow-lg shadow-red-900">
-            <span className="text-white font-black text-3xl tracking-tight">L</span>
-          </div>
-          <div className="text-center">
-            <h1 className="text-5xl font-black text-white tracking-tighter">LAB</h1>
-            <p className="text-zinc-400 text-sm mt-1 tracking-widest uppercase">Fitness Training</p>
-          </div>
-        </div>
-
-        {/* Tagline */}
-        <div className="text-center space-y-1">
-          <p className="text-zinc-200 text-lg font-medium">Train smarter. Track everything.</p>
-          <p className="text-zinc-500 text-sm">Push-ups, squats, Neon Run, and boxing — all in one place.</p>
-        </div>
-
-        {/* Features */}
-        <div className="w-full grid grid-cols-2 gap-3">
-          {[
-            { icon: "🏋️", label: "AI pose detection" },
-            { icon: "🎮", label: "Neon Run game" },
-            { icon: "🥊", label: "Boxing mode" },
-            { icon: "📊", label: "Progress charts" },
-          ].map((f) => (
-            <div
-              key={f.label}
-              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-3 flex items-center gap-2"
-            >
-              <span className="text-lg">{f.icon}</span>
-              <span className="text-zinc-300 text-sm font-medium">{f.label}</span>
+    <div className="min-h-screen bg-black flex flex-col items-center justify-between px-4 py-8">
+      {/* Spacer so content stays centered */}
+      <div className="flex-1 flex items-center justify-center w-full">
+        <div className="w-full max-w-md flex flex-col items-center gap-8">
+          {/* Logo / Brand */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-20 h-20 rounded-2xl bg-red-600 flex items-center justify-center shadow-lg shadow-red-900">
+              <span className="text-white font-black text-3xl tracking-tight">L</span>
             </div>
-          ))}
-        </div>
+            <div className="text-center">
+              <h1 className="text-5xl font-black text-white tracking-tighter">LAB</h1>
+              <p className="text-zinc-400 text-sm mt-1 tracking-widest uppercase">Fitness Training</p>
+            </div>
+          </div>
 
-        {/* Login */}
-        <div className="w-full flex flex-col items-center gap-4">
-          <a
-            href={`${API_BASE_URL}/auth/google`}
-            className="w-full"
-            data-testid="button-google-login"
-          >
-            <Button
-              className="w-full h-12 bg-white hover:bg-zinc-100 text-black font-semibold text-base rounded-xl flex items-center justify-center gap-3 transition-all"
+          {/* Tagline */}
+          <div className="text-center space-y-1">
+            <p className="text-zinc-200 text-lg font-medium">Train smarter. Track everything.</p>
+            <p className="text-zinc-500 text-sm">Push-ups, squats, Neon Run, and boxing — all in one place.</p>
+          </div>
+
+          {/* Features */}
+          <div className="w-full grid grid-cols-2 gap-3">
+            {[
+              { icon: "🏋️", label: "AI pose detection" },
+              { icon: "🎮", label: "Neon Run game" },
+              { icon: "🥊", label: "Boxing mode" },
+              { icon: "📊", label: "Progress charts" },
+            ].map((f) => (
+              <div
+                key={f.label}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-3 flex items-center gap-2"
+              >
+                <span className="text-lg">{f.icon}</span>
+                <span className="text-zinc-300 text-sm font-medium">{f.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Login */}
+          <div className="w-full flex flex-col items-center gap-4">
+            <a
+              href={`${API_BASE_URL}/auth/google`}
+              className="w-full"
+              data-testid="button-google-login"
             >
-              <GoogleIcon />
-              Continue with Google
-            </Button>
-          </a>
-          <p className="text-zinc-600 text-xs text-center max-w-xs">
-            Your workout history is private and linked to your Google account.
-          </p>
+              <Button
+                className="w-full h-12 bg-white hover:bg-zinc-100 text-black font-semibold text-base rounded-xl flex items-center justify-center gap-3 transition-all"
+              >
+                <GoogleIcon />
+                Continue with Google
+              </Button>
+            </a>
+            <p className="text-zinc-600 text-xs text-center max-w-xs">
+              Your workout history is private and linked to your Google account.
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="w-full text-center pt-6">
+        <p className="text-zinc-600 text-xs">
+          Support:{" "}
+          <a
+            href="mailto:learnandburn.lab.support@gmail.com"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
+          >
+            learnandburn.lab.support@gmail.com
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }

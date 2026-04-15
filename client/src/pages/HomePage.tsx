@@ -348,6 +348,19 @@ export default function HomePage() {
           <WorkoutHistory />
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-800 py-4 text-center">
+        <p className="text-zinc-600 text-xs">
+          Support:{" "}
+          <a
+            href="mailto:learnandburn.lab.support@gmail.com"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
+          >
+            learnandburn.lab.support@gmail.com
+          </a>
+        </p>
+      </footer>
     </div>
   );
 }
