@@ -1,0 +1,13 @@
+{
+  "name": "LAB — Fitness Training",
+  "short_name": "LAB",
+  "description": "AI-powered fitness tracking with pose detection, Neon Run game, and boxing mode.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#dc2626",
+  "icons": [
+    { "src": "/apple-touch-icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

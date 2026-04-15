@@ -1,5 +1,16 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "2SG-r_Esv45p_ldkRkrRw"
+uri = "file://client/public/apple-touch-icon.png"
+type = "image"
+title = "LAB fitness app icon"
+
+[[generated]]
+id = "v7JAs6VX6IE2JAPn5gx3-"
+uri = "file://client/public/og-image.png"
+type = "image"
+title = "LAB og image"
 
 [[outputs]]
 id = "_tDyJMfp3ACaNsAMe0s21"
