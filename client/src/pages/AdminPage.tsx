@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_EMAIL = "mohammednv23158@gmail.com";
 
@@ -68,6 +69,16 @@ export default function AdminPage() {
   const [table, setTable] = useState<TableFilter>("all");
 
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const { toast } = useToast();
+
+  const backfillMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/backfill").then(r => r.json()),
+    onSuccess: (data: { updated: number }) => {
+      toast({ title: `Backfill complete — ${data.updated} rows updated` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
+    },
+    onError: () => toast({ title: "Backfill failed", variant: "destructive" }),
+  });
 
   const { data: records = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ["/api/admin/search", activeSearch, table],
@@ -103,9 +114,22 @@ export default function AdminPage() {
           <ArrowLeft size={20} />
         </button>
         <h1 className="text-lg font-bold text-red-500">Admin Panel</h1>
-        <span className="text-gray-500 text-sm ml-auto">
-          {records.length} record{records.length !== 1 ? "s" : ""}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            data-testid="button-backfill"
+            size="sm"
+            variant="outline"
+            className="border-yellow-700 text-yellow-400 hover:bg-yellow-900/30 gap-1.5 text-xs"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            <RefreshCw size={13} className={backfillMutation.isPending ? "animate-spin" : ""} />
+            {backfillMutation.isPending ? "Fixing…" : "Fix NULL Records"}
+          </Button>
+          <span className="text-gray-500 text-sm">
+            {records.length} record{records.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">

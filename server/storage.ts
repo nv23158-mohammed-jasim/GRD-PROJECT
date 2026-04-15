@@ -58,6 +58,7 @@ export interface IStorage {
 
   // Admin methods
   adminSearch(search: string, table: string): Promise<unknown[]>;
+  adminBackfill(): Promise<{ updated: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -144,6 +145,21 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBoxingSession(id: number, userId: string): Promise<void> {
     await db.delete(boxingSessions).where(and(eq(boxingSessions.id, id), eq(boxingSessions.userId, userId)));
+  }
+
+  async adminBackfill(): Promise<{ updated: number }> {
+    const { pool } = await import("./db");
+    let total = 0;
+    const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
+    for (const t of tables) {
+      const res = await pool.query(`
+        UPDATE ${t} SET user_email = u.email, user_name = u.name
+        FROM users u
+        WHERE ${t}.user_id = u.id AND (${t}.user_email IS NULL OR ${t}.user_name IS NULL)
+      `);
+      total += res.rowCount || 0;
+    }
+    return { updated: total };
   }
 
   async adminSearch(search: string, table: string): Promise<unknown[]> {

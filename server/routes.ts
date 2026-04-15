@@ -151,5 +151,14 @@ export async function registerRoutes(
     res.json(results);
   });
 
+  app.post("/api/admin/backfill", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const result = await storage.adminBackfill();
+    res.json(result);
+  });
+
   return httpServer;
 }
