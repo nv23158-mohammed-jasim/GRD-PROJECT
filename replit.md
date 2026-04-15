@@ -60,11 +60,13 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication
 
-- **Method**: Google OAuth 2.0 via Passport.js
+- **Method**: Google OAuth 2.0 via Passport.js + JWT tokens (dual auth)
 - **Session storage**: PostgreSQL (`session` table) via connect-pg-simple
-- **Files**: `server/auth.ts` — passport setup, session middleware, auth routes
+- **JWT**: After OAuth, server generates 30-day JWT and redirects to `FRONTEND_URL?token=JWT`; frontend stores in localStorage; sent as `Authorization: Bearer TOKEN` header on every request
+- **Why JWT**: Fixes iOS Safari cross-site cookie blocking when Amplify frontend calls Render backend
+- **Files**: `server/auth.ts` — passport setup, session middleware, JWT generation, auth routes
 - **Routes**: GET `/auth/google`, GET `/auth/google/callback`, POST `/auth/logout`, GET `/api/auth/me`
-- **Frontend guard**: `AuthGuard` component in App.tsx; `use-auth.ts` hook
+- **Frontend guard**: `AuthGuard` component in App.tsx; `use-auth.ts` hook; token captured in App `useEffect`
 - **Required env vars**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (already set), optionally `GOOGLE_CALLBACK_URL`
 - **Default callback**: `https://grd-project-server.onrender.com/auth/google/callback`
 
