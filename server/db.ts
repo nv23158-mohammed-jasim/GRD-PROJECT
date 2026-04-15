@@ -106,22 +106,25 @@ export async function ensureSchema() {
         date timestamp DEFAULT now() NOT NULL
       );
     `);
-    // Add intensity column if missing (for older deployments)
-    await client.query(`
-      ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS intensity integer NOT NULL DEFAULT 2;
-    `);
-    // Add user_email and user_name columns — each as a SEPARATE query so all run even if one stalls
+    // Add missing columns for older deployments — each as a SEPARATE query
     const addCols = [
-      `ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
-      `ALTER TABLE bmi_entries ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+      // user_id may be missing on tables created before auth was added
+      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_id varchar`,
+      `ALTER TABLE game_sessions    ADD COLUMN IF NOT EXISTS user_id varchar`,
+      `ALTER TABLE boxing_sessions  ADD COLUMN IF NOT EXISTS user_id varchar`,
+      // intensity added later to workout_sessions
+      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS intensity integer NOT NULL DEFAULT 2`,
+      // user_email / user_name for admin panel backfill
+      `ALTER TABLE bmi_entries      ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE bmi_entries      ADD COLUMN IF NOT EXISTS user_name  varchar(255)`,
       `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
-      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
-      `ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
-      `ALTER TABLE game_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
-      `ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
-      `ALTER TABLE boxing_sessions ADD COLUMN IF NOT EXISTS user_name varchar(255)`,
+      `ALTER TABLE workout_sessions ADD COLUMN IF NOT EXISTS user_name  varchar(255)`,
+      `ALTER TABLE game_sessions    ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE game_sessions    ADD COLUMN IF NOT EXISTS user_name  varchar(255)`,
+      `ALTER TABLE boxing_sessions  ADD COLUMN IF NOT EXISTS user_email varchar(255)`,
+      `ALTER TABLE boxing_sessions  ADD COLUMN IF NOT EXISTS user_name  varchar(255)`,
     ];
-    for (const q of addCols) await client.query(q);
+    for (const q of addCols) await client.query(q).catch(err => console.error("[ensureSchema] col add failed:", q, err));
 
     // Backfill — correlated subquery avoids JOIN mismatch issues
     const backfillTables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];

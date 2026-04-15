@@ -154,8 +154,9 @@ export class DatabaseStorage implements IStorage {
     const tables = ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"];
     for (const t of tables) {
       try {
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_id    varchar`);
         await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_email varchar(255)`);
-        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name varchar(255)`);
+        await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS user_name  varchar(255)`);
 
         // Count rows that still need backfilling
         const needsUpdate = await pool.query(
