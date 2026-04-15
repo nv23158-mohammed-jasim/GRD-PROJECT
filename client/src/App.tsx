@@ -12,6 +12,7 @@ import GamePage from "@/pages/GamePage";
 import BoxingModePage from "@/pages/BoxingModePage";
 import BMIPage from "@/pages/BMIPage";
 import LoginPage from "@/pages/LoginPage";
+import Dashboard from "@/pages/Dashboard";
 import { useAuth } from "@/hooks/use-auth";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -70,6 +71,9 @@ function Router() {
       </Route>
       <Route path="/boxing">
         <AuthGuard><BoxingModePage /></AuthGuard>
+      </Route>
+      <Route path="/dashboard">
+        <AuthGuard><Dashboard /></AuthGuard>
       </Route>
       <Route component={NotFound} />
     </Switch>
