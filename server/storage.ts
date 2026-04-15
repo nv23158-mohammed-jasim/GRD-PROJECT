@@ -173,40 +173,80 @@ export class DatabaseStorage implements IStorage {
     const { pool } = await import("./db");
 
     const like = `%${search}%`;
-    // Only filter on guaranteed columns (users table via JOIN — always exists)
-    const where = search
-      ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1 OR CAST(t.user_id AS TEXT) ILIKE $1)`
+    const searchWhere = search
+      ? `WHERE (COALESCE(t.user_email, u.email, '') ILIKE $1 OR COALESCE(t.user_name, u.name, '') ILIKE $1)`
+      : ``;
+    const searchWhereFallback = search
+      ? `WHERE (u.email ILIKE $1 OR u.name ILIKE $1)`
       : ``;
     const params = search ? [like] : [];
 
-    // Only use columns guaranteed to exist on every version of these tables.
-    // user_email / user_name come ONLY from the JOIN — no optional table columns.
-    const queries: Record<string, string> = {
-      bmi: `
-        SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
-               t.gender, t.activity_level, t.suggested_difficulty, t.date,
-               u.email AS user_email, u.name AS user_name,
-               'bmi' AS record_type
-        FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
-      workout: `
-        SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
-               t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
-               u.email AS user_email, u.name AS user_name,
-               'workout' AS record_type
-        FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
-      game: `
-        SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
-               t.completed, t.time_played, t.date,
-               u.email AS user_email, u.name AS user_name,
-               'game' AS record_type
-        FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
-      boxing: `
-        SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
-               t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
-               t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
-               u.email AS user_email, u.name AS user_name,
-               'boxing' AS record_type
-        FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${where} ORDER BY t.date DESC`,
+    // Primary queries: use COALESCE(stored, joined) so backfilled values show even for users not in `users` table
+    // Fallback queries: join-only, used if the table is missing user_email/user_name columns
+    type TableQueries = { primary: string; fallback: string };
+    const queries: Record<string, TableQueries> = {
+      bmi: {
+        primary: `
+          SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
+                 t.gender, t.activity_level, t.suggested_difficulty, t.date,
+                 COALESCE(t.user_email, u.email) AS user_email,
+                 COALESCE(t.user_name,  u.name)  AS user_name,
+                 'bmi' AS record_type
+          FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
+        fallback: `
+          SELECT t.id, t.user_id, t.age, t.height_cm, t.weight_kg, t.bmi, t.category,
+                 t.gender, t.activity_level, t.suggested_difficulty, t.date,
+                 u.email AS user_email, u.name AS user_name,
+                 'bmi' AS record_type
+          FROM bmi_entries t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+      },
+      workout: {
+        primary: `
+          SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
+                 t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
+                 COALESCE(t.user_email, u.email) AS user_email,
+                 COALESCE(t.user_name,  u.name)  AS user_name,
+                 'workout' AS record_type
+          FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
+        fallback: `
+          SELECT t.id, t.user_id, t.exercise_type, t.difficulty,
+                 t.target_reps, t.completed_reps, t.time_limit, t.time_taken, t.grade, t.date,
+                 u.email AS user_email, u.name AS user_name,
+                 'workout' AS record_type
+          FROM workout_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+      },
+      game: {
+        primary: `
+          SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
+                 t.completed, t.time_played, t.date,
+                 COALESCE(t.user_email, u.email) AS user_email,
+                 COALESCE(t.user_name,  u.name)  AS user_name,
+                 'game' AS record_type
+          FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
+        fallback: `
+          SELECT t.id, t.user_id, t.difficulty, t.stage, t.score, t.target_score,
+                 t.completed, t.time_played, t.date,
+                 u.email AS user_email, u.name AS user_name,
+                 'game' AS record_type
+          FROM game_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+      },
+      boxing: {
+        primary: `
+          SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
+                 t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
+                 t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
+                 COALESCE(t.user_email, u.email) AS user_email,
+                 COALESCE(t.user_name,  u.name)  AS user_name,
+                 'boxing' AS record_type
+          FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhere} ORDER BY t.date DESC`,
+        fallback: `
+          SELECT t.id, t.user_id, t.difficulty, t.round, t.total_rounds, t.score,
+                 t.punches_landed, t.punches_missed, t.dodges_successful, t.dodges_missed,
+                 t.blocks_successful, t.blocks_missed, t.completed, t.time_played, t.date,
+                 u.email AS user_email, u.name AS user_name,
+                 'boxing' AS record_type
+          FROM boxing_sessions t LEFT JOIN users u ON t.user_id = u.id ${searchWhereFallback} ORDER BY t.date DESC`,
+      },
     };
 
     const tables = table === "all" ? ["bmi", "workout", "game", "boxing"] : [table];
@@ -214,10 +254,18 @@ export class DatabaseStorage implements IStorage {
     for (const t of tables) {
       if (queries[t]) {
         try {
-          const res = await pool.query(queries[t], params);
+          // Try COALESCE version first (shows stored names even for users not in `users` table)
+          const res = await pool.query(queries[t].primary, params);
           results.push(...res.rows);
-        } catch (err) {
-          console.error(`[adminSearch] query failed for table "${t}":`, err);
+        } catch {
+          try {
+            // Fall back to JOIN-only if the stored columns don't exist yet
+            console.warn(`[adminSearch] primary query failed for "${t}", trying fallback`);
+            const res = await pool.query(queries[t].fallback, params);
+            results.push(...res.rows);
+          } catch (err2) {
+            console.error(`[adminSearch] both queries failed for "${t}":`, err2);
+          }
         }
       }
     }
