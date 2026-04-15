@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Activity, ArrowRight, RefreshCw } from "lucide-react";
+import { useCreateBmiEntry } from "@/hooks/use-bmi-entries";
 
 type ActivityLevel = "sedentary" | "light" | "moderate" | "very_active";
 type Gender = "male" | "female";
@@ -99,6 +100,7 @@ export default function BMIPage() {
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>("moderate");
   const [profile, setProfile] = useState<BMIProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const createBmiEntry = useCreateBmiEntry();
 
   useEffect(() => {
     const saved = localStorage.getItem("fitness_bmi_profile");
@@ -121,20 +123,34 @@ export default function BMIPage() {
   const handleCalculate = () => {
     if (!canCalculate) return;
     const bmiVal = parseFloat(weightKg) / Math.pow(parseFloat(heightCm) / 100, 2);
+    const roundedBmi = Math.round(bmiVal * 10) / 10;
     const difficulty = getSuggestedDifficulty(bmiVal, activityLevel, gender);
+    const category = getBMICategory(bmiVal, gender);
     const newProfile: BMIProfile = {
       gender,
       age: parseInt(age),
       heightCm: parseFloat(heightCm),
       weightKg: parseFloat(weightKg),
       activityLevel,
-      bmi: Math.round(bmiVal * 10) / 10,
-      category: getBMICategory(bmiVal, gender),
+      bmi: roundedBmi,
+      category,
       suggestedDifficulty: difficulty,
     };
     setProfile(newProfile);
     setIsEditing(false);
     localStorage.setItem("fitness_bmi_profile", JSON.stringify(newProfile));
+
+    // Save to Neon database
+    createBmiEntry.mutate({
+      age: parseInt(age),
+      heightCm: String(parseFloat(heightCm)),
+      weightKg: String(parseFloat(weightKg)),
+      bmi: String(roundedBmi),
+      category,
+      gender,
+      activityLevel,
+      suggestedDifficulty: difficulty,
+    });
   };
 
   const handleContinue = () => {

@@ -13,13 +13,18 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Daily fitness entries (steps, calories, weight tracking)
-export const entries = pgTable("entries", {
+// BMI entries — saved each time the user submits their BMI profile
+export const bmiEntries = pgTable("bmi_entries", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id"),
-  steps: integer("steps").notNull(),
-  calories: integer("calories").notNull(),
-  weight: decimal("weight", { precision: 5, scale: 2 }).notNull(),
+  userId: varchar("user_id").notNull(),
+  age: integer("age").notNull(),
+  heightCm: decimal("height_cm", { precision: 5, scale: 1 }).notNull(),
+  weightKg: decimal("weight_kg", { precision: 5, scale: 1 }).notNull(),
+  bmi: decimal("bmi", { precision: 4, scale: 1 }).notNull(),
+  category: varchar("category", { length: 20 }).notNull(),       // Underweight | Normal | Overweight | Obese
+  gender: varchar("gender", { length: 10 }).notNull(),           // male | female
+  activityLevel: varchar("activity_level", { length: 20 }).notNull(),
+  suggestedDifficulty: varchar("suggested_difficulty", { length: 10 }).notNull(),
   date: timestamp("date").defaultNow().notNull(),
 });
 
@@ -71,12 +76,10 @@ export const workoutSessions = pgTable("workout_sessions", {
 });
 
 // === BASE SCHEMAS ===
-export const insertEntrySchema = createInsertSchema(entries).omit({ 
-  id: true, 
+export const insertBmiEntrySchema = createInsertSchema(bmiEntries).omit({
+  id: true,
   date: true,
   userId: true,
-}).extend({
-  weight: z.preprocess((val) => String(val), z.string()), 
 });
 
 export const insertWorkoutSessionSchema = createInsertSchema(workoutSessions).omit({
@@ -102,13 +105,12 @@ export const insertBoxingSessionSchema = createInsertSchema(boxingSessions).omit
 // User types
 export type User = typeof users.$inferSelect;
 
-// Entry types
-export type Entry = typeof entries.$inferSelect;
-export type InsertEntry = z.infer<typeof insertEntrySchema>;
-export type CreateEntryRequest = InsertEntry;
-export type UpdateEntryRequest = Partial<InsertEntry>;
-export type EntryResponse = Entry;
-export type EntriesListResponse = Entry[];
+// BMI Entry types
+export type BmiEntry = typeof bmiEntries.$inferSelect;
+export type InsertBmiEntry = z.infer<typeof insertBmiEntrySchema>;
+export type CreateBmiEntryRequest = InsertBmiEntry;
+export type BmiEntryResponse = BmiEntry;
+export type BmiEntriesListResponse = BmiEntry[];
 
 // Workout session types
 export type WorkoutSession = typeof workoutSessions.$inferSelect;

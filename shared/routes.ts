@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertEntrySchema, entries, insertWorkoutSessionSchema, workoutSessions, insertGameSessionSchema, gameSessions, insertBoxingSessionSchema, boxingSessions } from './schema';
+import { insertBmiEntrySchema, bmiEntries, insertWorkoutSessionSchema, workoutSessions, insertGameSessionSchema, gameSessions, insertBoxingSessionSchema, boxingSessions } from './schema';
 
 // ============================================
 // SHARED ERROR SCHEMAS
@@ -21,29 +21,21 @@ export const errorSchemas = {
 // API CONTRACT
 // ============================================
 export const api = {
-  entries: {
+  bmiEntries: {
     list: {
       method: 'GET' as const,
-      path: '/api/entries',
+      path: '/api/bmi-entries',
       responses: {
-        200: z.array(z.custom<typeof entries.$inferSelect>()),
+        200: z.array(z.custom<typeof bmiEntries.$inferSelect>()),
       },
     },
     create: {
       method: 'POST' as const,
-      path: '/api/entries',
-      input: insertEntrySchema,
+      path: '/api/bmi-entries',
+      input: insertBmiEntrySchema,
       responses: {
-        201: z.custom<typeof entries.$inferSelect>(),
+        201: z.custom<typeof bmiEntries.$inferSelect>(),
         400: errorSchemas.validation,
-      },
-    },
-    delete: {
-      method: 'DELETE' as const,
-      path: '/api/entries/:id',
-      responses: {
-        204: z.void(),
-        404: errorSchemas.notFound,
       },
     },
   },
@@ -145,9 +137,9 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
 // ============================================
 // TYPE HELPERS
 // ============================================
-export type EntryInput = z.infer<typeof api.entries.create.input>;
-export type EntryResponse = z.infer<typeof api.entries.create.responses[201]>;
-export type EntriesListResponse = z.infer<typeof api.entries.list.responses[200]>;
+export type BmiEntryInput = z.infer<typeof api.bmiEntries.create.input>;
+export type BmiEntryResponse = z.infer<typeof api.bmiEntries.create.responses[201]>;
+export type BmiEntriesListResponse = z.infer<typeof api.bmiEntries.list.responses[200]>;
 
 export type WorkoutSessionInput = z.infer<typeof api.workoutSessions.create.input>;
 export type WorkoutSessionResponse = z.infer<typeof api.workoutSessions.create.responses[201]>;

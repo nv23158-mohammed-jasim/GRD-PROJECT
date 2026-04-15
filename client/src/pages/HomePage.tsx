@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Menu, Activity, Dumbbell, History, Home, Play, TrendingUp, Award,
-  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut, ClipboardList,
+  Gamepad2, Zap, Flame, Calendar, Trophy, Timer, BarChart2, User, LogOut,
 } from "lucide-react";
 import type { WorkoutSession } from "@shared/schema";
 import type { BMIProfile } from "@/pages/BMIPage";
@@ -87,7 +87,6 @@ export default function HomePage() {
     { icon: Play, label: "Start Workout", path: "/select-exercise" },
     { icon: Gamepad2, label: "Game Mode", path: "/game" },
     { icon: Zap, label: "Boxing Mode", path: "/boxing" },
-    { icon: ClipboardList, label: "Fitness Log", path: "/dashboard" },
     { icon: User, label: "BMI Profile", path: "/bmi" },
   ];
 

@@ -6,13 +6,11 @@ import { z } from "zod";
 import { getUserFromToken } from "./auth";
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  // Check JWT Authorization header first (works on iOS Safari / cross-origin)
   const tokenUser = await getUserFromToken(req);
   if (tokenUser) {
     req.user = tokenUser;
     return next();
   }
-  // Fall back to session-based auth
   if (req.isAuthenticated() && req.user) {
     return next();
   }
@@ -28,16 +26,16 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // === ENTRIES ROUTES ===
-  app.get(api.entries.list.path, requireAuth, async (req, res) => {
-    const entries = await storage.getEntries(userId(req));
+  // === BMI ENTRIES ROUTES ===
+  app.get(api.bmiEntries.list.path, requireAuth, async (req, res) => {
+    const entries = await storage.getBmiEntries(userId(req));
     res.json(entries);
   });
 
-  app.post(api.entries.create.path, requireAuth, async (req, res) => {
+  app.post(api.bmiEntries.create.path, requireAuth, async (req, res) => {
     try {
-      const input = api.entries.create.input.parse(req.body);
-      const entry = await storage.createEntry(input, userId(req));
+      const input = api.bmiEntries.create.input.parse(req.body);
+      const entry = await storage.createBmiEntry(input, userId(req));
       res.status(201).json(entry);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -48,15 +46,6 @@ export async function registerRoutes(
       }
       throw err;
     }
-  });
-
-  app.delete(api.entries.delete.path, requireAuth, async (req, res) => {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(404).json({ message: "Invalid ID" });
-    }
-    await storage.deleteEntry(id, userId(req));
-    res.status(204).send();
   });
 
   // === WORKOUT SESSIONS ROUTES ===
@@ -83,9 +72,7 @@ export async function registerRoutes(
 
   app.delete(api.workoutSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(404).json({ message: "Invalid ID" });
-    }
+    if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
     await storage.deleteWorkoutSession(id, userId(req));
     res.status(204).send();
   });
@@ -114,9 +101,7 @@ export async function registerRoutes(
 
   app.delete(api.gameSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(404).json({ message: "Invalid ID" });
-    }
+    if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
     await storage.deleteGameSession(id, userId(req));
     res.status(204).send();
   });
@@ -145,9 +130,7 @@ export async function registerRoutes(
 
   app.delete(api.boxingSessions.delete.path, requireAuth, async (req, res) => {
     const id = Number(req.params.id);
-    if (isNaN(id)) {
-      return res.status(404).json({ message: "Invalid ID" });
-    }
+    if (isNaN(id)) return res.status(404).json({ message: "Invalid ID" });
     await storage.deleteBoxingSession(id, userId(req));
     res.status(204).send();
   });

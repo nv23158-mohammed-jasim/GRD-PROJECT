@@ -1,12 +1,12 @@
 import { db } from "./db";
 import {
-  entries,
+  bmiEntries,
   workoutSessions,
   gameSessions,
   boxingSessions,
   users,
-  type CreateEntryRequest,
-  type EntryResponse,
+  type CreateBmiEntryRequest,
+  type BmiEntryResponse,
   type CreateWorkoutSessionRequest,
   type WorkoutSessionResponse,
   type CreateGameSessionRequest,
@@ -15,16 +15,15 @@ import {
   type BoxingSessionResponse,
   type User,
 } from "@shared/schema";
-import { eq, desc, and, isNull, or } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | null>;
 
-  // Entry methods
-  getEntries(userId: string): Promise<EntryResponse[]>;
-  createEntry(entry: CreateEntryRequest, userId: string): Promise<EntryResponse>;
-  deleteEntry(id: number, userId: string): Promise<void>;
+  // BMI entry methods
+  getBmiEntries(userId: string): Promise<BmiEntryResponse[]>;
+  createBmiEntry(entry: CreateBmiEntryRequest, userId: string): Promise<BmiEntryResponse>;
 
   // Workout session methods
   getWorkoutSessions(userId: string): Promise<WorkoutSessionResponse[]>;
@@ -48,20 +47,16 @@ export class DatabaseStorage implements IStorage {
     return user || null;
   }
 
-  // Entry methods
-  async getEntries(userId: string): Promise<EntryResponse[]> {
-    return await db.select().from(entries)
-      .where(eq(entries.userId, userId))
-      .orderBy(desc(entries.date));
+  // BMI entry methods
+  async getBmiEntries(userId: string): Promise<BmiEntryResponse[]> {
+    return await db.select().from(bmiEntries)
+      .where(eq(bmiEntries.userId, userId))
+      .orderBy(desc(bmiEntries.date));
   }
 
-  async createEntry(entry: CreateEntryRequest, userId: string): Promise<EntryResponse> {
-    const [created] = await db.insert(entries).values({ ...entry, userId }).returning();
+  async createBmiEntry(entry: CreateBmiEntryRequest, userId: string): Promise<BmiEntryResponse> {
+    const [created] = await db.insert(bmiEntries).values({ ...entry, userId }).returning();
     return created;
-  }
-
-  async deleteEntry(id: number, userId: string): Promise<void> {
-    await db.delete(entries).where(and(eq(entries.id, id), eq(entries.userId, userId)));
   }
 
   // Workout session methods
