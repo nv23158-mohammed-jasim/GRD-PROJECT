@@ -59,6 +59,7 @@ export interface IStorage {
   // Admin methods
   adminSearch(search: string, table: string): Promise<unknown[]>;
   adminBackfill(): Promise<{ updated: number; detail: Record<string, unknown> }>;
+  adminDeleteUser(userId: string): Promise<{ deleted: boolean; recordsRemoved: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -298,6 +299,17 @@ export class DatabaseStorage implements IStorage {
       results.push(...rows);
     }
     return results;
+  }
+
+  async adminDeleteUser(userId: string): Promise<{ deleted: boolean; recordsRemoved: number }> {
+    const { pool } = await import("./db");
+    let recordsRemoved = 0;
+    for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
+      const r = await pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
+      recordsRemoved += r.rowCount ?? 0;
+    }
+    const r = await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    return { deleted: (r.rowCount ?? 0) > 0, recordsRemoved };
   }
 }
 

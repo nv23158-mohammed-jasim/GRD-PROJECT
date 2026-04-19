@@ -5,7 +5,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,7 +39,17 @@ function formatDate(d: string) {
   });
 }
 
-function UserRow({ user }: { user: Record<string, unknown> }) {
+function UserRow({
+  user,
+  isOwn,
+  onDelete,
+  isDeleting,
+}: {
+  user: Record<string, unknown>;
+  isOwn: boolean;
+  onDelete: () => void;
+  isDeleting: boolean;
+}) {
   const method = String(user.login_method || "google");
   const methodColor = method === "email"
     ? "bg-blue-900 text-blue-300"
@@ -51,6 +71,7 @@ function UserRow({ user }: { user: Record<string, unknown> }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-white font-medium text-sm">{String(user.name || "—")}</span>
           <span className="text-gray-400 text-xs truncate">{String(user.email || "—")}</span>
+          {isOwn && <span className="text-yellow-500 text-xs">(you)</span>}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <Badge className={`text-xs px-1.5 py-0 flex items-center gap-1 ${methodColor}`}>
@@ -62,7 +83,22 @@ function UserRow({ user }: { user: Record<string, unknown> }) {
           )}
         </div>
       </div>
-      <span className="text-gray-500 text-xs shrink-0">{formatDate(String(user.created_at))}</span>
+      <span className="text-gray-500 text-xs shrink-0 mr-2">{formatDate(String(user.created_at))}</span>
+      {!isOwn && (
+        <button
+          data-testid={`button-delete-user-${user.id}`}
+          onClick={onDelete}
+          disabled={isDeleting}
+          title="Delete user and all their records"
+          className="shrink-0 p-1.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-950/40 transition-colors disabled:opacity-40"
+        >
+          {isDeleting ? (
+            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Trash2 size={15} />
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -106,6 +142,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [table, setTable] = useState<TableFilter>("all");
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string; email: string } | null>(null);
 
   const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const { toast } = useToast();
@@ -138,6 +175,24 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
     },
     onError: () => toast({ title: "Claim failed", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest("DELETE", `/api/admin/users/${encodeURIComponent(userId)}`).then(r => r.json()),
+    onSuccess: (data: { deleted: boolean; recordsRemoved: number }) => {
+      toast({
+        title: "User deleted",
+        description: `Account removed along with ${data.recordsRemoved} activity record${data.recordsRemoved !== 1 ? "s" : ""}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      toast({ title: "Delete failed", description: msg, variant: "destructive" });
+    },
   });
 
   const { data: records = [], isLoading } = useQuery<Record<string, unknown>[]>({
@@ -182,6 +237,41 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {/* Confirmation dialog */}
+      <AlertDialog open={!!pendingDelete} onOpenChange={open => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent className="bg-gray-900 border-gray-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              You are about to permanently delete <strong className="text-white">{pendingDelete?.name}</strong>{" "}
+              ({pendingDelete?.email}). This will also remove all their workout, BMI, game, and boxing records.
+              <br /><br />
+              <span className="text-red-400 font-medium">This cannot be undone.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="button-cancel-delete"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-confirm-delete"
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (pendingDelete) {
+                  deleteMutation.mutate(pendingDelete.id);
+                  setPendingDelete(null);
+                }
+              }}
+            >
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="border-b border-gray-800 px-4 py-3 flex items-center gap-3">
         <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white transition-colors" data-testid="button-back">
@@ -210,7 +300,9 @@ export default function AdminPage() {
             {backfillMutation.isPending ? "Fixing…" : "Fix NULL Records"}
           </Button>
           <span className="text-gray-500 text-sm">
-            {table === "users" ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""}` : `${records.length} record${records.length !== 1 ? "s" : ""}`}
+            {table === "users"
+              ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""}`
+              : `${records.length} record${records.length !== 1 ? "s" : ""}`}
           </span>
         </div>
       </div>
@@ -282,7 +374,17 @@ export default function AdminPage() {
           ) : (
             <div className="space-y-2">
               {filteredUsers.map((u, i) => (
-                <UserRow key={`user-${u.id}-${i}`} user={u} />
+                <UserRow
+                  key={`user-${u.id}-${i}`}
+                  user={u}
+                  isOwn={String(u.email).toLowerCase() === ADMIN_EMAIL.toLowerCase()}
+                  isDeleting={deleteMutation.isPending && deleteMutation.variables === String(u.id)}
+                  onDelete={() => setPendingDelete({
+                    id: String(u.id),
+                    name: String(u.name || "Unknown"),
+                    email: String(u.email || ""),
+                  })}
+                />
               ))}
             </div>
           )
