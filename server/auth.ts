@@ -183,7 +183,7 @@ export function setupAuth(app: Express) {
       if (existing) return res.status(409).json({ message: "An account with this email already exists" });
 
       const passwordHash = await bcrypt.hash(password, 12);
-      const id = `email_${randomUUID()}`;
+      const id = randomUUID();
       const [created] = await db.insert(users).values({ id, email: normalizedEmail, name: name.trim(), picture: null, authProvider: "email", passwordHash }).returning();
       const token = jwt.sign({ id: created.id }, JWT_SECRET, { expiresIn: "30d" });
       res.json({ token, user: { id: created.id, email: created.email, name: created.name, picture: created.picture } });
