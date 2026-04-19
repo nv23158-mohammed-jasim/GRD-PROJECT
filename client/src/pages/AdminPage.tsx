@@ -325,6 +325,73 @@ export default function AdminPage() {
 
   const handleSearch = () => setActiveSearch(search);
 
+  function exportActivityCSV() {
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const date = (d: unknown) => d ? new Date(String(d)).toISOString() : "";
+
+    let headers: string[];
+    let rows: string[][];
+
+    if (table === "bmi") {
+      headers = ["Name", "Email", "BMI", "Category", "Gender", "Age", "Height (cm)", "Weight (kg)", "Date"];
+      rows = records.map(r => [
+        String(r.user_name ?? ""), String(r.user_email ?? ""),
+        String(r.bmi ?? ""), String(r.category ?? ""), String(r.gender ?? ""),
+        String(r.age ?? ""), String(r.height_cm ?? ""), String(r.weight_kg ?? ""),
+        date(r.date),
+      ]);
+    } else if (table === "workout") {
+      headers = ["Name", "Email", "Exercise Type", "Difficulty", "Completed Reps", "Target Reps", "Grade", "Date"];
+      rows = records.map(r => [
+        String(r.user_name ?? ""), String(r.user_email ?? ""),
+        String(r.exercise_type ?? ""), String(r.difficulty ?? ""),
+        String(r.completed_reps ?? ""), String(r.target_reps ?? ""),
+        String(r.grade ?? ""), date(r.date),
+      ]);
+    } else if (table === "game") {
+      headers = ["Name", "Email", "Stage", "Score", "Target Score", "Difficulty", "Completed", "Date"];
+      rows = records.map(r => [
+        String(r.user_name ?? ""), String(r.user_email ?? ""),
+        String(r.stage ?? ""), String(r.score ?? ""), String(r.target_score ?? ""),
+        String(r.difficulty ?? ""), r.completed ? "Yes" : "No",
+        date(r.date),
+      ]);
+    } else if (table === "boxing") {
+      headers = ["Name", "Email", "Round", "Total Rounds", "Score", "Punches Landed", "Dodges", "Blocks", "Date"];
+      rows = records.map(r => [
+        String(r.user_name ?? ""), String(r.user_email ?? ""),
+        String(r.round ?? ""), String(r.total_rounds ?? ""), String(r.score ?? ""),
+        String(r.punches_landed ?? ""), String(r.dodges_successful ?? ""),
+        String(r.blocks_successful ?? ""), date(r.date),
+      ]);
+    } else {
+      // "all" tab — include record_type + common + type-specific fields
+      headers = ["Type", "Name", "Email", "BMI", "Category", "Gender", "Age", "Height (cm)", "Weight (kg)", "Exercise Type", "Difficulty", "Completed Reps", "Target Reps", "Grade", "Stage", "Score", "Target Score", "Completed", "Round", "Total Rounds", "Punches Landed", "Dodges", "Blocks", "Date"];
+      rows = records.map(r => [
+        String(r.record_type ?? ""), String(r.user_name ?? ""), String(r.user_email ?? ""),
+        String(r.bmi ?? ""), String(r.category ?? ""), String(r.gender ?? ""),
+        String(r.age ?? ""), String(r.height_cm ?? ""), String(r.weight_kg ?? ""),
+        String(r.exercise_type ?? ""), String(r.difficulty ?? ""),
+        String(r.completed_reps ?? ""), String(r.target_reps ?? ""), String(r.grade ?? ""),
+        String(r.stage ?? ""), String(r.score ?? ""), String(r.target_score ?? ""),
+        r.completed != null ? (r.completed ? "Yes" : "No") : "",
+        String(r.round ?? ""), String(r.total_rounds ?? ""),
+        String(r.punches_landed ?? ""), String(r.dodges_successful ?? ""),
+        String(r.blocks_successful ?? ""), date(r.date),
+      ]);
+    }
+
+    const csv = [headers.map(escape).join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const suffix = activeSearch ? `-filtered` : "";
+    a.download = `${table}-records${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function exportCSV() {
     const headers = ["Name", "Email", "Login Method", "Signup Date", "Workout Count", "BMI Count", "Game Count", "Boxing Count"];
     const rows = filteredUsers.map(u => [
@@ -526,6 +593,23 @@ export default function AdminPage() {
                 Clear
               </button>
             )}
+          </div>
+        )}
+
+        {/* Export CSV — shown on activity tabs (not users, not audit) */}
+        {table !== "users" && table !== "audit" && (
+          <div className="flex justify-end">
+            <Button
+              data-testid="button-export-activity-csv"
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 gap-1.5 text-xs"
+              onClick={exportActivityCSV}
+              disabled={records.length === 0 || isLoading}
+            >
+              <Download size={13} />
+              Export CSV
+            </Button>
           </div>
         )}
 
