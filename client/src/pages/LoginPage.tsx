@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { API_BASE_URL } from "@/lib/queryClient";
+import { signInWithMicrosoft, firebaseConfigured } from "@/lib/firebase";
 
 type Mode = "choose" | "login" | "register";
 
@@ -16,6 +17,29 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [msLoading, setMsLoading] = useState(false);
+
+  async function handleMicrosoftLogin() {
+    setMsLoading(true);
+    setError("");
+    try {
+      const idToken = await signInWithMicrosoft();
+      const res = await fetch(`${API_BASE_URL}/auth/firebase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || "Microsoft sign-in failed"); return; }
+      localStorage.setItem("auth_token", data.token);
+      window.location.href = "/";
+    } catch (e: any) {
+      if (e?.code === "auth/popup-closed-by-user") return;
+      setError("Microsoft sign-in failed. Please try again.");
+    } finally {
+      setMsLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) navigate("/");
@@ -95,12 +119,20 @@ export default function LoginPage() {
                   </Button>
                 </a>
 
-                <a href={`${API_BASE_URL}/auth/microsoft`} className="w-full" data-testid="button-microsoft-login">
-                  <Button className="w-full h-12 bg-[#0078d4] hover:bg-[#106ebe] text-white font-semibold text-base rounded-xl flex items-center justify-center gap-3 transition-all">
+                <div className="w-full relative group">
+                  <Button
+                    onClick={firebaseConfigured ? handleMicrosoftLogin : undefined}
+                    disabled={msLoading || !firebaseConfigured}
+                    className="w-full h-12 bg-[#0078d4] hover:bg-[#106ebe] disabled:opacity-50 text-white font-semibold text-base rounded-xl flex items-center justify-center gap-3 transition-all"
+                    data-testid="button-microsoft-login"
+                  >
                     <MicrosoftIcon />
-                    Continue with Microsoft
+                    {msLoading ? "Signing in..." : "Continue with Microsoft"}
                   </Button>
-                </a>
+                  {!firebaseConfigured && (
+                    <p className="text-zinc-600 text-xs text-center mt-1">Setup required — see admin configuration</p>
+                  )}
+                </div>
 
                 <div className="w-full flex items-center gap-3">
                   <div className="flex-1 h-px bg-zinc-800" />

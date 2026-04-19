@@ -1,16 +1,33 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as LocalStrategy } from "passport-local";
-import MicrosoftStrategy from "passport-microsoft";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { type Express, type Request, type Response, type NextFunction } from "express";
+import { type Express, type Request } from "express";
 import { pool, db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+
+// Firebase Admin (optional — only initialised if FIREBASE_SERVICE_ACCOUNT is set)
+let firebaseAdmin: any = null;
+async function getFirebaseAdmin() {
+  if (firebaseAdmin) return firebaseAdmin;
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT) return null;
+  try {
+    const admin = await import("firebase-admin");
+    if (!admin.default.apps.length) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      admin.default.initializeApp({ credential: admin.default.credential.cert(serviceAccount) });
+    }
+    firebaseAdmin = admin.default;
+    return firebaseAdmin;
+  } catch {
+    return null;
+  }
+}
 
 declare global {
   namespace Express {
@@ -29,9 +46,7 @@ if (!process.env.SESSION_SECRET) {
 }
 const JWT_SECRET = process.env.SESSION_SECRET;
 
-export function getJwtSecret() {
-  return JWT_SECRET;
-}
+export function getJwtSecret() { return JWT_SECRET; }
 
 export async function getUserFromToken(req: Request): Promise<Express.User | null> {
   const authHeader = req.headers.authorization;
@@ -50,35 +65,27 @@ export function setupAuth(app: Express) {
   app.set("trust proxy", 1);
 
   const PgSession = connectPgSimple(session);
-
-  app.use(
-    session({
-      store: new PgSession({ pool, tableName: "session" }),
-      secret: JWT_SECRET,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      },
-    })
-  );
+  app.use(session({
+    store: new PgSession({ pool, tableName: "session" }),
+    secret: JWT_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+  }));
 
   app.use(passport.initialize());
   app.use(passport.session());
 
-  passport.serializeUser((user: Express.User, done) => {
-    done(null, user.id);
-  });
-
+  passport.serializeUser((user: Express.User, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
     try {
       const [user] = await db.select().from(users).where(eq(users.id, id));
       done(null, user || null);
-    } catch (err) {
-      done(err);
-    }
+    } catch (err) { done(err); }
   });
 
   // ── Google OAuth ──────────────────────────────────────────────────────────
@@ -89,100 +96,82 @@ export function setupAuth(app: Express) {
         ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/google/callback`
         : "https://grd-project-server.onrender.com/auth/google/callback");
 
-    passport.use(
-      new GoogleStrategy(
-        { clientID: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, callbackURL },
-        async (_accessToken, _refreshToken, profile, done) => {
-          try {
-            const [existing] = await db.select().from(users).where(eq(users.id, profile.id));
-            if (existing) return done(null, existing);
-            const [created] = await db
-              .insert(users)
-              .values({ id: profile.id, email: profile.emails?.[0]?.value || "", name: profile.displayName, picture: profile.photos?.[0]?.value, authProvider: "google" })
-              .returning();
-            done(null, created);
-          } catch (err) { done(err as Error); }
-        }
-      )
-    );
-  }
-
-  // ── Microsoft OAuth ───────────────────────────────────────────────────────
-  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
-    const msCallbackURL =
-      process.env.REPLIT_DEV_DOMAIN
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/microsoft/callback`
-        : "https://grd-project-server.onrender.com/auth/microsoft/callback";
-
-    passport.use(
-      new MicrosoftStrategy(
-        {
-          clientID: process.env.MICROSOFT_CLIENT_ID,
-          clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-          callbackURL: msCallbackURL,
-          scope: ["user.read"],
-        },
-        async (_accessToken: string, _refreshToken: string, profile: any, done: Function) => {
-          try {
-            const msId = `ms_${profile.id}`;
-            const [existing] = await db.select().from(users).where(eq(users.id, msId));
-            if (existing) return done(null, existing);
-            const email = profile.emails?.[0]?.value || profile._json?.mail || profile._json?.userPrincipalName || "";
-            const [created] = await db
-              .insert(users)
-              .values({ id: msId, email, name: profile.displayName || profile._json?.displayName || "Microsoft User", picture: null, authProvider: "microsoft" })
-              .returning();
-            done(null, created);
-          } catch (err) { done(err as Error); }
-        }
-      )
-    );
+    passport.use(new GoogleStrategy(
+      { clientID: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, callbackURL },
+      async (_at, _rt, profile, done) => {
+        try {
+          const [existing] = await db.select().from(users).where(eq(users.id, profile.id));
+          if (existing) return done(null, existing);
+          const [created] = await db.insert(users).values({
+            id: profile.id,
+            email: profile.emails?.[0]?.value || "",
+            name: profile.displayName,
+            picture: profile.photos?.[0]?.value,
+            authProvider: "google",
+          }).returning();
+          done(null, created);
+        } catch (err) { done(err as Error); }
+      }
+    ));
   }
 
   // ── Email / Password (Local) ──────────────────────────────────────────────
-  passport.use(
-    new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
-      try {
-        const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
-        if (!user || !user.passwordHash) return done(null, false, { message: "Invalid email or password" });
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return done(null, false, { message: "Invalid email or password" });
-        return done(null, user);
-      } catch (err) { done(err); }
-    })
-  );
+  passport.use(new LocalStrategy({ usernameField: "email" }, async (email, password, done) => {
+    try {
+      const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
+      if (!user || !user.passwordHash) return done(null, false, { message: "Invalid email or password" });
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) return done(null, false, { message: "Invalid email or password" });
+      return done(null, user);
+    } catch (err) { done(err); }
+  }));
 
-  // ── Routes ────────────────────────────────────────────────────────────────
-
+  // ── Google OAuth Routes ───────────────────────────────────────────────────
   app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-
-  app.get(
-    "/auth/google/callback",
+  app.get("/auth/google/callback",
     passport.authenticate("google", { failureRedirect: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/login` : "/login" }),
     (req, res) => {
       const user = req.user as Express.User;
       const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "30d" });
-      const frontendUrl = process.env.FRONTEND_URL || "/";
-      res.redirect(`${frontendUrl}?token=${token}`);
+      res.redirect(`${process.env.FRONTEND_URL || "/"}?token=${token}`);
     }
   );
 
-  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
-    app.get("/auth/microsoft", passport.authenticate("microsoft"));
+  // ── Firebase (Microsoft via Firebase) ────────────────────────────────────
+  app.post("/auth/firebase", async (req, res) => {
+    try {
+      const { idToken } = req.body;
+      if (!idToken) return res.status(400).json({ message: "idToken is required" });
 
-    app.get(
-      "/auth/microsoft/callback",
-      passport.authenticate("microsoft", { failureRedirect: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/login` : "/login" }),
-      (req, res) => {
-        const user = req.user as Express.User;
-        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "30d" });
-        const frontendUrl = process.env.FRONTEND_URL || "/";
-        res.redirect(`${frontendUrl}?token=${token}`);
+      const admin = await getFirebaseAdmin();
+      if (!admin) return res.status(503).json({ message: "Firebase is not configured on this server" });
+
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const firebaseUid = decoded.uid;
+      const email = decoded.email || "";
+      const name = decoded.name || decoded.email?.split("@")[0] || "User";
+      const picture = decoded.picture || null;
+
+      // Determine provider from Firebase token
+      const providerData = decoded.firebase?.sign_in_provider || "firebase";
+      const authProvider = providerData.includes("microsoft") ? "microsoft" : providerData;
+      const userId = `fb_${firebaseUid}`;
+
+      const [existing] = await db.select().from(users).where(eq(users.id, userId));
+      if (existing) {
+        const token = jwt.sign({ id: existing.id }, JWT_SECRET, { expiresIn: "30d" });
+        return res.json({ token, user: { id: existing.id, email: existing.email, name: existing.name, picture: existing.picture } });
       }
-    );
-  }
 
-  // Register with email/password
+      const [created] = await db.insert(users).values({ id: userId, email, name, picture, authProvider }).returning();
+      const token = jwt.sign({ id: created.id }, JWT_SECRET, { expiresIn: "30d" });
+      res.json({ token, user: { id: created.id, email: created.email, name: created.name, picture: created.picture } });
+    } catch (err: any) {
+      res.status(401).json({ message: "Invalid Firebase token" });
+    }
+  });
+
+  // ── Email/Password Routes ─────────────────────────────────────────────────
   app.post("/auth/register", async (req, res) => {
     try {
       const { email, password, name } = req.body;
@@ -195,19 +184,14 @@ export function setupAuth(app: Express) {
 
       const passwordHash = await bcrypt.hash(password, 12);
       const id = `email_${randomUUID()}`;
-      const [created] = await db
-        .insert(users)
-        .values({ id, email: normalizedEmail, name: name.trim(), picture: null, authProvider: "email", passwordHash })
-        .returning();
-
+      const [created] = await db.insert(users).values({ id, email: normalizedEmail, name: name.trim(), picture: null, authProvider: "email", passwordHash }).returning();
       const token = jwt.sign({ id: created.id }, JWT_SECRET, { expiresIn: "30d" });
       res.json({ token, user: { id: created.id, email: created.email, name: created.name, picture: created.picture } });
-    } catch (err) {
+    } catch {
       res.status(500).json({ message: "Registration failed" });
     }
   });
 
-  // Login with email/password
   app.post("/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
       if (err) return res.status(500).json({ message: "Login failed" });
@@ -217,9 +201,7 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.post("/auth/logout", (req, res) => {
-    req.logout(() => res.json({ ok: true }));
-  });
+  app.post("/auth/logout", (req, res) => { req.logout(() => res.json({ ok: true })); });
 
   app.get("/api/auth/me", async (req, res) => {
     const tokenUser = await getUserFromToken(req);
