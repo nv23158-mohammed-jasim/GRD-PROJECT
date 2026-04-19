@@ -15,11 +15,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2 } from "lucide-react";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2, ClipboardList } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-type TableFilter = "all" | "bmi" | "workout" | "game" | "boxing" | "users";
+type TableFilter = "all" | "bmi" | "workout" | "game" | "boxing" | "users" | "audit";
 
 const TABLE_TABS: { key: TableFilter; label: string; icon: React.ReactNode; color: string }[] = [
   { key: "all", label: "All Records", icon: <Users size={14} />, color: "bg-gray-700" },
@@ -28,6 +28,7 @@ const TABLE_TABS: { key: TableFilter; label: string; icon: React.ReactNode; colo
   { key: "workout", label: "Workout", icon: <Dumbbell size={14} />, color: "bg-red-700" },
   { key: "game", label: "Neon Run", icon: <Gamepad2 size={14} />, color: "bg-blue-700" },
   { key: "boxing", label: "Boxing", icon: <Swords size={14} />, color: "bg-orange-700" },
+  { key: "audit", label: "Audit Log", icon: <ClipboardList size={14} />, color: "bg-slate-700" },
 ];
 
 function formatDate(d: string) {
@@ -167,6 +168,43 @@ function RecordRow({ row }: { row: Record<string, unknown> }) {
   );
 }
 
+interface AuditLogEntry {
+  id: number;
+  action: string;
+  adminId: string;
+  adminEmail: string;
+  targetUserId: string;
+  targetUserEmail: string;
+  targetUserName: string;
+  recordsRemoved: number;
+  timestamp: string;
+}
+
+function AuditLogRow({ entry }: { entry: AuditLogEntry }) {
+  return (
+    <div
+      data-testid={`audit-log-entry-${entry.id}`}
+      className="flex items-start gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors"
+    >
+      <div className="shrink-0 mt-0.5">
+        <Trash2 size={14} className="text-red-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-white font-medium text-sm">{entry.targetUserName}</span>
+          <span className="text-gray-400 text-xs truncate">{entry.targetUserEmail}</span>
+          <span className="text-gray-600 text-xs">·</span>
+          <span className="text-gray-500 text-xs">{entry.recordsRemoved} record{entry.recordsRemoved !== 1 ? "s" : ""} removed</span>
+        </div>
+        <p className="text-gray-500 text-xs mt-0.5">
+          Deleted by <span className="text-gray-400">{entry.adminEmail}</span>
+        </p>
+      </div>
+      <span data-testid={`audit-log-timestamp-${entry.id}`} className="text-gray-500 text-xs shrink-0">{formatDate(entry.timestamp)}</span>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -227,6 +265,7 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/audit-log"] });
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : "Delete failed";
@@ -239,13 +278,19 @@ export default function AdminPage() {
     queryFn: () =>
       apiRequest("GET", `/api/admin/search?search=${encodeURIComponent(activeSearch)}&table=${table}`)
         .then(r => r.json()),
-    enabled: isAdmin && table !== "users",
+    enabled: isAdmin && table !== "users" && table !== "audit",
   });
 
   const { data: allUsers = [], isLoading: usersLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ["/api/admin/users"],
     queryFn: () => apiRequest("GET", "/api/admin/users").then(r => r.json()),
     enabled: isAdmin && table === "users",
+  });
+
+  const { data: auditLogs = [], isLoading: auditLoading } = useQuery<AuditLogEntry[]>({
+    queryKey: ["/api/admin/audit-log"],
+    queryFn: () => apiRequest("GET", "/api/admin/audit-log").then(r => r.json()),
+    enabled: isAdmin && table === "audit",
   });
 
   const { data: counts } = useQuery<Record<string, number | string>>({
@@ -349,6 +394,8 @@ export default function AdminPage() {
           <span className="text-gray-500 text-sm">
             {table === "users"
               ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""}`
+              : table === "audit"
+              ? `${auditLogs.length} deletion${auditLogs.length !== 1 ? "s" : ""} logged`
               : `${records.length} record${records.length !== 1 ? "s" : ""}`}
           </span>
         </div>
@@ -437,8 +484,25 @@ export default function AdminPage() {
           )
         )}
 
+        {/* Audit log list */}
+        {table === "audit" && (
+          auditLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">No deletions recorded yet.</div>
+          ) : (
+            <div className="space-y-2" data-testid="audit-log-list">
+              {auditLogs.map(entry => (
+                <AuditLogRow key={entry.id} entry={entry} />
+              ))}
+            </div>
+          )
+        )}
+
         {/* Activity records list */}
-        {table !== "users" && (
+        {table !== "users" && table !== "audit" && (
           isLoading ? (
             <div className="flex justify-center py-12">
               <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />

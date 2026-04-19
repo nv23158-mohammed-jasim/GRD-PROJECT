@@ -5,6 +5,7 @@ import {
   gameSessions,
   boxingSessions,
   users,
+  adminAuditLog,
   type CreateBmiEntryRequest,
   type BmiEntryResponse,
   type CreateWorkoutSessionRequest,
@@ -14,6 +15,7 @@ import {
   type CreateBoxingSessionRequest,
   type BoxingSessionResponse,
   type User,
+  type AdminAuditLog,
 } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
@@ -59,7 +61,11 @@ export interface IStorage {
   // Admin methods
   adminSearch(search: string, table: string): Promise<unknown[]>;
   adminBackfill(): Promise<{ updated: number; detail: Record<string, unknown> }>;
-  adminDeleteUser(userId: string): Promise<{ deleted: boolean; recordsRemoved: number }>;
+  adminDeleteUser(
+    userId: string,
+    admin: UserIdentity
+  ): Promise<{ deleted: boolean; recordsRemoved: number }>;
+  getAuditLogs(limit?: number): Promise<AdminAuditLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -301,25 +307,70 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async adminDeleteUser(userId: string): Promise<{ deleted: boolean; recordsRemoved: number }> {
+  async adminDeleteUser(
+    userId: string,
+    admin: UserIdentity
+  ): Promise<{ deleted: boolean; recordsRemoved: number }> {
     const { pool } = await import("./db");
     const client = await pool.connect();
+    let recordsRemoved = 0;
+    let deleted = false;
     try {
       await client.query("BEGIN");
-      let recordsRemoved = 0;
+
+      // Read target user info inside the transaction (consistent snapshot, still readable before DELETE)
+      const targetRow = await client.query(
+        `SELECT id, email, name FROM users WHERE id = $1`,
+        [userId]
+      );
+      const targetUser = targetRow.rows[0] as { id: string; email: string; name: string } | undefined;
+
+      // Delete activity records
       for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
         const r = await client.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
         recordsRemoved += r.rowCount ?? 0;
       }
+
+      // Delete the user
       const r = await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      deleted = (r.rowCount ?? 0) > 0;
+
+      // Write the audit log entry inside the same transaction so it is atomic with the deletion.
+      // The log uses plain varchars (no FK) so it never blocks on a missing user row.
+      if (deleted && targetUser) {
+        await client.query(
+          `INSERT INTO admin_audit_log
+             (action, admin_id, admin_email, target_user_id, target_user_email, target_user_name, records_removed)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            "delete_user",
+            admin.id,
+            admin.email,
+            targetUser.id,
+            targetUser.email,
+            targetUser.name,
+            recordsRemoved,
+          ]
+        );
+      }
+
       await client.query("COMMIT");
-      return { deleted: (r.rowCount ?? 0) > 0, recordsRemoved };
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
     } finally {
       client.release();
     }
+
+    return { deleted, recordsRemoved };
+  }
+
+  async getAuditLogs(limit = 50): Promise<AdminAuditLog[]> {
+    return await db
+      .select()
+      .from(adminAuditLog)
+      .orderBy(desc(adminAuditLog.timestamp))
+      .limit(limit);
   }
 }
 

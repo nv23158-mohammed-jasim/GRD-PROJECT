@@ -2,6 +2,20 @@ import { pgTable, text, serial, integer, decimal, timestamp, varchar } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Admin audit log — records every time an admin deletes a user
+// Uses plain varchar for IDs (no FK) so entries survive user deletion
+export const adminAuditLog = pgTable("admin_audit_log", {
+  id: serial("id").primaryKey(),
+  action: varchar("action", { length: 50 }).notNull().default("delete_user"),
+  adminId: varchar("admin_id", { length: 255 }).notNull(),
+  adminEmail: varchar("admin_email", { length: 255 }).notNull(),
+  targetUserId: varchar("target_user_id", { length: 255 }).notNull(),
+  targetUserEmail: varchar("target_user_email", { length: 255 }).notNull(),
+  targetUserName: varchar("target_user_name", { length: 255 }).notNull(),
+  recordsRemoved: integer("records_removed").notNull().default(0),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
 // === TABLE DEFINITIONS ===
 
 // Users (authenticated via Google OAuth, Microsoft OAuth, or email/password)
@@ -142,6 +156,9 @@ export type InsertBoxingSession = z.infer<typeof insertBoxingSessionSchema>;
 export type CreateBoxingSessionRequest = InsertBoxingSession;
 export type BoxingSessionResponse = BoxingSession;
 export type BoxingSessionsListResponse = BoxingSession[];
+
+// Admin audit log types
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 
 // Exercise and difficulty types
 export type ExerciseType = "pushups" | "squats" | "plank";

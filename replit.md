@@ -85,6 +85,7 @@ Preferred communication style: Simple, everyday language.
   - `workout_sessions`: Exercise session records (type, difficulty, reps, grade, timing, userId)
   - `game_sessions`: Neon Run game records (stage, difficulty, score, time played, completion status, userId)
   - `boxing_sessions`: Boxing Mode records (difficulty, rounds, score, punches/dodges/blocks stats, time played, userId)
+  - `admin_audit_log`: Audit trail for admin user deletions (who acted, deleted user info, records removed, timestamp — no FK so entries survive deletion)
 
 ### Project Structure
 

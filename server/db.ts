@@ -106,6 +106,20 @@ export async function ensureSchema() {
         date timestamp DEFAULT now() NOT NULL
       );
     `);
+    // Admin audit log table — no FK so entries outlive deleted users
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id serial PRIMARY KEY,
+        action varchar(50) NOT NULL DEFAULT 'delete_user',
+        admin_id varchar(255) NOT NULL,
+        admin_email varchar(255) NOT NULL,
+        target_user_id varchar(255) NOT NULL,
+        target_user_email varchar(255) NOT NULL,
+        target_user_name varchar(255) NOT NULL,
+        records_removed integer NOT NULL DEFAULT 0,
+        timestamp timestamp NOT NULL DEFAULT now()
+      );
+    `);
     // Add missing columns for older deployments — each as a SEPARATE query
     const addCols = [
       // user_id may be missing on tables created before auth was added

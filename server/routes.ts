@@ -180,8 +180,21 @@ export async function registerRoutes(
       return res.status(400).json({ message: "You cannot delete your own admin account." });
     }
     try {
-      const result = await storage.adminDeleteUser(targetId);
+      const result = await storage.adminDeleteUser(targetId, u);
       res.json(result);
+    } catch (e) {
+      res.status(500).json({ message: String(e) });
+    }
+  });
+
+  app.get("/api/admin/audit-log", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    try {
+      const logs = await storage.getAuditLogs(100);
+      res.json(logs);
     } catch (e) {
       res.status(500).json({ message: String(e) });
     }
