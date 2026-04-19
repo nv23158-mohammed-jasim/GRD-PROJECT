@@ -357,13 +357,11 @@ export default function AdminPage() {
       if (!String(u.name).toLowerCase().includes(q) && !String(u.email).toLowerCase().includes(q)) return false;
     }
     if (methodFilter !== "all" && String(u.login_method || "google") !== methodFilter) return false;
-    if (dateFrom && u.created_at) {
-      if (new Date(String(u.created_at)) < new Date(dateFrom)) return false;
-    }
-    if (dateTo && u.created_at) {
-      const endOfDay = new Date(dateTo);
-      endOfDay.setHours(23, 59, 59, 999);
-      if (new Date(String(u.created_at)) > endOfDay) return false;
+    if (dateFrom || dateTo) {
+      if (!u.created_at) return false;
+      const signedUp = new Date(String(u.created_at)).getTime();
+      if (dateFrom && signedUp < new Date(dateFrom + "T00:00:00.000Z").getTime()) return false;
+      if (dateTo   && signedUp > new Date(dateTo   + "T23:59:59.999Z").getTime()) return false;
     }
     return true;
   });
