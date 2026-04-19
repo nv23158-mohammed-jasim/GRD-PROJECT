@@ -213,6 +213,8 @@ export default function AdminPage() {
   const [table, setTable] = useState<TableFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string; email: string } | null>(null);
   const [methodFilter, setMethodFilter] = useState<"all" | "google" | "email">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const { toast } = useToast();
 
@@ -329,7 +331,7 @@ export default function AdminPage() {
       String(u.name ?? ""),
       String(u.email ?? ""),
       String(u.login_method ?? "google"),
-      u.created_at ? new Date(String(u.created_at)).toISOString() : "",
+      u.created_at ? new Date(String(u.created_at)).toISOString().slice(0, 10) : "",
       String(u.workout_count ?? 0),
       String(u.bmi_count ?? 0),
       String(u.game_count ?? 0),
@@ -341,8 +343,11 @@ export default function AdminPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const suffix = methodFilter !== "all" ? `-${methodFilter}` : "";
-    a.download = `users${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+    const methodSuffix = methodFilter !== "all" ? `-${methodFilter}` : "";
+    const dateSuffix = dateFrom || dateTo
+      ? `-${dateFrom || "start"}_${dateTo || "end"}`
+      : `-${new Date().toISOString().slice(0, 10)}`;
+    a.download = `users${methodSuffix}${dateSuffix}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -352,6 +357,14 @@ export default function AdminPage() {
       if (!String(u.name).toLowerCase().includes(q) && !String(u.email).toLowerCase().includes(q)) return false;
     }
     if (methodFilter !== "all" && String(u.login_method || "google") !== methodFilter) return false;
+    if (dateFrom && u.created_at) {
+      if (new Date(String(u.created_at)) < new Date(dateFrom)) return false;
+    }
+    if (dateTo && u.created_at) {
+      const endOfDay = new Date(dateTo);
+      endOfDay.setHours(23, 59, 59, 999);
+      if (new Date(String(u.created_at)) > endOfDay) return false;
+    }
     return true;
   });
 
@@ -484,6 +497,39 @@ export default function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* Date range filter — only shown on Users tab */}
+        {table === "users" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-gray-500 text-xs">Joined:</span>
+            <input
+              type="date"
+              data-testid="input-date-from"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              max={dateTo || undefined}
+              className="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-green-600"
+            />
+            <span className="text-gray-600 text-xs">to</span>
+            <input
+              type="date"
+              data-testid="input-date-to"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              min={dateFrom || undefined}
+              className="bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-green-600"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                data-testid="button-clear-dates"
+                onClick={() => { setDateFrom(""); setDateTo(""); }}
+                className="text-gray-500 hover:text-gray-300 text-xs transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Login method filter + CSV export — only shown on Users tab */}
         {table === "users" && (
