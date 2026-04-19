@@ -44,3 +44,7 @@ waitForPort = 5000
 VITE_FIREBASE_API_KEY = "AIzaSyBE2QiGjvUojLSk9zuEnkrAlli3MDk4VCA"
 VITE_FIREBASE_AUTH_DOMAIN = "lab-c75ca.firebaseapp.com"
 VITE_FIREBASE_PROJECT_ID = "lab-c75ca"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
