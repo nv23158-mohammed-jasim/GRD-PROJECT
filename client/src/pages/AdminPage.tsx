@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2, ClipboardList } from "lucide-react";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2, ClipboardList, Download } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -461,9 +461,9 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Login method filter — only shown on Users tab */}
+        {/* Login method filter + CSV export — only shown on Users tab */}
         {table === "users" && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-gray-500 text-xs">Filter:</span>
             {(["all", "google", "email"] as const).map(m => (
               <button
@@ -481,6 +481,40 @@ export default function AdminPage() {
                 {m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)}
               </button>
             ))}
+            <div className="flex-1" />
+            <button
+              data-testid="button-export-csv"
+              onClick={() => {
+                const rows = filteredUsers;
+                if (rows.length === 0) return;
+                const headers = ["Name", "Email", "Login Method", "Signup Date", "Workouts", "BMI Logs", "Games", "Boxing Sessions"];
+                const csvRows = [
+                  headers.join(","),
+                  ...rows.map(u => [
+                    `"${String(u.name || "").replace(/"/g, '""')}"`,
+                    `"${String(u.email || "").replace(/"/g, '""')}"`,
+                    String(u.login_method || "google"),
+                    u.created_at ? new Date(String(u.created_at)).toISOString().slice(0, 10) : "",
+                    String(u.workout_count ?? 0),
+                    String(u.bmi_count ?? 0),
+                    String(u.game_count ?? 0),
+                    String(u.boxing_count ?? 0),
+                  ].join(","))
+                ];
+                const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `lab-users-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              title="Export visible users as CSV"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 border border-gray-800 transition-colors"
+            >
+              <Download size={12} />
+              Export CSV
+            </button>
           </div>
         )}
 
