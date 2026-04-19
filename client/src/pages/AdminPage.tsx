@@ -82,6 +82,7 @@ function UserRow({
   isDeleting: boolean;
 }) {
   const method = String(user.login_method || "google");
+  const methodLabel = method === "email" ? "Email" : method === "microsoft" ? "Microsoft" : "Google";
   const methodColor = method === "email"
     ? "bg-blue-900 text-blue-300"
     : method === "microsoft"
@@ -89,29 +90,28 @@ function UserRow({
     : "bg-red-900 text-red-300";
   const MethodIcon = method === "email" ? Mail : Chrome;
 
+  const displayName = String(user.name || "").trim() || String(user.email || "").split("@")[0] || "Unknown";
+
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors">
       {user.picture ? (
         <img src={String(user.picture)} alt="" className="w-8 h-8 rounded-full shrink-0" />
       ) : (
-        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
-          <span className="text-gray-300 text-sm font-bold">{String(user.name || "?")[0].toUpperCase()}</span>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${method === "email" ? "bg-blue-900" : "bg-gray-700"}`}>
+          <span className="text-gray-200 text-sm font-bold">{displayName[0].toUpperCase()}</span>
         </div>
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-white font-medium text-sm">{String(user.name || "—")}</span>
+          <span className="text-white font-medium text-sm">{displayName}</span>
           <span className="text-gray-400 text-xs truncate">{String(user.email || "—")}</span>
           {isOwn && <span className="text-yellow-500 text-xs">(you)</span>}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           <Badge className={`text-xs px-1.5 py-0 flex items-center gap-1 ${methodColor}`}>
             <MethodIcon size={10} />
-            {method}
+            {methodLabel}
           </Badge>
-          {user.has_password && (
-            <span className="text-gray-500 text-xs">password set</span>
-          )}
           <ActivityCounts user={user} />
         </div>
       </div>
