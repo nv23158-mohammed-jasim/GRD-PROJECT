@@ -60,15 +60,18 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication
 
-- **Method**: Google OAuth 2.0 via Passport.js + JWT tokens (dual auth)
+- **Methods**: Google OAuth 2.0, Microsoft OAuth 2.0, Email/Password (Local) — all via Passport.js + JWT tokens
 - **Session storage**: PostgreSQL (`session` table) via connect-pg-simple
-- **JWT**: After OAuth, server generates 30-day JWT and redirects to `FRONTEND_URL?token=JWT`; frontend stores in localStorage; sent as `Authorization: Bearer TOKEN` header on every request
+- **JWT**: After OAuth/login, server generates 30-day JWT and either redirects to `FRONTEND_URL?token=JWT` (OAuth) or returns it in the JSON response (email/password); frontend stores in localStorage; sent as `Authorization: Bearer TOKEN` header on every request
 - **Why JWT**: Fixes iOS Safari cross-site cookie blocking when Amplify frontend calls Render backend
-- **Files**: `server/auth.ts` — passport setup, session middleware, JWT generation, auth routes
-- **Routes**: GET `/auth/google`, GET `/auth/google/callback`, POST `/auth/logout`, GET `/api/auth/me`
+- **Files**: `server/auth.ts` — passport setup, session middleware, JWT generation, all auth routes
+- **Routes**: GET `/auth/google`, GET `/auth/google/callback`, GET `/auth/microsoft`, GET `/auth/microsoft/callback`, POST `/auth/register`, POST `/auth/login`, POST `/auth/logout`, GET `/api/auth/me`
 - **Frontend guard**: `AuthGuard` component in App.tsx; `use-auth.ts` hook; token captured in App `useEffect`
 - **Required env vars**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (already set), optionally `GOOGLE_CALLBACK_URL`
-- **Default callback**: `https://grd-project-server.onrender.com/auth/google/callback`
+- **Microsoft env vars**: `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (set in Render when Azure app is configured)
+- **Default Google callback**: `https://grd-project-server.onrender.com/auth/google/callback`
+- **Default Microsoft callback**: `https://grd-project-server.onrender.com/auth/microsoft/callback`
+- **Email/Password**: passwords hashed with bcryptjs (12 rounds); stored in `password_hash` column; never exposed in API responses
 
 ### Data Storage
 
