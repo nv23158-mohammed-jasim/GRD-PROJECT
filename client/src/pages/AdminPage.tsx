@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2, ClipboardList, Download } from "lucide-react";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome, Trash2, ClipboardList, Download, Database, ArrowUpDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -181,23 +181,40 @@ interface AuditLogEntry {
 }
 
 function AuditLogRow({ entry }: { entry: AuditLogEntry }) {
+  const isDelete = entry.action === "delete_user";
+  const isBackfill = entry.action === "backfill";
+  const isOrphan = entry.action === "claim_orphans";
+
+  const ActionIcon = isDelete ? Trash2 : isBackfill ? RefreshCw : Database;
+  const iconColor = isDelete ? "text-red-400" : isBackfill ? "text-yellow-400" : "text-cyan-400";
+  const actionLabel = isDelete ? "Deleted user"
+    : isBackfill ? "Ran backfill"
+    : isOrphan ? "Claimed orphans"
+    : entry.action;
+
   return (
     <div
       data-testid={`audit-log-entry-${entry.id}`}
       className="flex items-start gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors"
     >
       <div className="shrink-0 mt-0.5">
-        <Trash2 size={14} className="text-red-400" />
+        <ActionIcon size={14} className={iconColor} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-white font-medium text-sm">{entry.targetUserName}</span>
-          <span className="text-gray-400 text-xs truncate">{entry.targetUserEmail}</span>
-          <span className="text-gray-600 text-xs">·</span>
-          <span className="text-gray-500 text-xs">{entry.recordsRemoved} record{entry.recordsRemoved !== 1 ? "s" : ""} removed</span>
+          {isDelete ? (
+            <>
+              <span className="text-white font-medium text-sm">{entry.targetUserName}</span>
+              <span className="text-gray-400 text-xs truncate">{entry.targetUserEmail}</span>
+              <span className="text-gray-600 text-xs">·</span>
+              <span className="text-gray-500 text-xs">{entry.recordsRemoved} record{entry.recordsRemoved !== 1 ? "s" : ""} removed</span>
+            </>
+          ) : (
+            <span className="text-white font-medium text-sm">{entry.targetUserName}</span>
+          )}
         </div>
         <p className="text-gray-500 text-xs mt-0.5">
-          Deleted by <span className="text-gray-400">{entry.adminEmail}</span>
+          {actionLabel} by <span className="text-gray-400">{entry.adminEmail}</span>
         </p>
       </div>
       <span data-testid={`audit-log-timestamp-${entry.id}`} className="text-gray-500 text-xs shrink-0">{formatDate(entry.timestamp)}</span>
@@ -215,6 +232,8 @@ export default function AdminPage() {
   const [methodFilter, setMethodFilter] = useState<"all" | "google" | "email">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "most-active">("newest");
+  const [auditSearch, setAuditSearch] = useState("");
 
   const { toast } = useToast();
 
@@ -431,7 +450,26 @@ export default function AdminPage() {
       if (dateTo   && signedUp > new Date(dateTo   + "T23:59:59.999Z").getTime()) return false;
     }
     return true;
+  }).sort((a, b) => {
+    if (sortBy === "newest") {
+      return new Date(String(b.created_at || 0)).getTime() - new Date(String(a.created_at || 0)).getTime();
+    }
+    if (sortBy === "oldest") {
+      return new Date(String(a.created_at || 0)).getTime() - new Date(String(b.created_at || 0)).getTime();
+    }
+    const totalA = Number(a.workout_count ?? 0) + Number(a.bmi_count ?? 0) + Number(a.game_count ?? 0) + Number(a.boxing_count ?? 0);
+    const totalB = Number(b.workout_count ?? 0) + Number(b.bmi_count ?? 0) + Number(b.game_count ?? 0) + Number(b.boxing_count ?? 0);
+    return totalB - totalA;
   });
+
+  const auditQuery = auditSearch.toLowerCase();
+  const filteredAuditLogs = auditLogs.filter(e =>
+    !auditQuery ||
+    e.adminEmail.toLowerCase().includes(auditQuery) ||
+    e.targetUserEmail.toLowerCase().includes(auditQuery) ||
+    e.targetUserName.toLowerCase().includes(auditQuery) ||
+    e.action.toLowerCase().includes(auditQuery)
+  );
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -501,7 +539,7 @@ export default function AdminPage() {
             {table === "users"
               ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""}`
               : table === "audit"
-              ? `${auditLogs.length} deletion${auditLogs.length !== 1 ? "s" : ""} logged`
+              ? `${filteredAuditLogs.length}${auditSearch ? ` of ${auditLogs.length}` : ""} action${auditLogs.length !== 1 ? "s" : ""} logged`
               : `${records.length} record${records.length !== 1 ? "s" : ""}`}
           </span>
         </div>
@@ -613,6 +651,27 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Sort + login method filter + CSV export — only shown on Users tab */}
+        {table === "users" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <ArrowUpDown size={13} className="text-gray-500 shrink-0" />
+            {(["newest", "oldest", "most-active"] as const).map(s => (
+              <button
+                key={s}
+                data-testid={`sort-${s}`}
+                onClick={() => setSortBy(s)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                  sortBy === s
+                    ? "bg-green-800 text-white"
+                    : "bg-gray-900 text-gray-400 hover:bg-gray-800 border border-gray-800"
+                }`}
+              >
+                {s === "newest" ? "Newest" : s === "oldest" ? "Oldest" : "Most Active"}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Login method filter + CSV export — only shown on Users tab */}
         {table === "users" && (
           <div className="flex items-center gap-2 flex-wrap">
@@ -675,6 +734,32 @@ export default function AdminPage() {
           )
         )}
 
+        {/* Audit search — only shown on audit tab */}
+        {table === "audit" && !auditLoading && auditLogs.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-xs">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                data-testid="input-audit-search"
+                type="text"
+                placeholder="Filter by admin, user, or action…"
+                value={auditSearch}
+                onChange={e => setAuditSearch(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 pl-7 focus:outline-none focus:border-slate-500"
+              />
+            </div>
+            {auditSearch && (
+              <button
+                data-testid="button-clear-audit-search"
+                onClick={() => setAuditSearch("")}
+                className="text-gray-500 hover:text-gray-300 text-xs transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Audit log list */}
         {table === "audit" && (
           auditLoading ? (
@@ -682,10 +767,12 @@ export default function AdminPage() {
               <div className="w-8 h-8 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : auditLogs.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">No deletions recorded yet.</div>
+            <div className="text-center py-12 text-gray-500">No actions recorded yet.</div>
+          ) : filteredAuditLogs.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">No entries match "{auditSearch}".</div>
           ) : (
             <div className="space-y-2" data-testid="audit-log-list">
-              {auditLogs.map(entry => (
+              {filteredAuditLogs.map(entry => (
                 <AuditLogRow key={entry.id} entry={entry} />
               ))}
             </div>

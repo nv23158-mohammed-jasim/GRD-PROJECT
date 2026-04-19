@@ -211,12 +211,24 @@ export async function registerRoutes(
     res.json(results);
   });
 
+  async function writeAuditLog(action: string, admin: { id: string; email: string; name: string }, meta: string) {
+    try {
+      const { pool } = await import("./db");
+      await pool.query(
+        `INSERT INTO admin_audit_log (action, admin_id, admin_email, target_user_id, target_user_email, target_user_name, records_removed)
+         VALUES ($1, $2, $3, '', '', $4, 0)`,
+        [action, admin.id, admin.email, meta]
+      );
+    } catch (_) { /* non-critical — don't fail the operation */ }
+  }
+
   app.post("/api/admin/backfill", requireAuth, async (req, res) => {
     const u = userIdentity(req);
     if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
       return res.status(403).json({ message: "Forbidden" });
     }
     const result = await storage.adminBackfill();
+    await writeAuditLog("backfill", u, `updated ${result.updated} rows`);
     res.json(result);
   });
 
@@ -226,6 +238,7 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Forbidden" });
     }
     const result = await storage.adminClaimOrphans(u.id);
+    await writeAuditLog("claim_orphans", u, `claimed ${result.claimed} orphan records`);
     res.json(result);
   });
 
