@@ -37,6 +37,38 @@ function formatDate(d: string) {
   });
 }
 
+function ActivityCounts({ user }: { user: Record<string, unknown> }) {
+  const workout = Number(user.workout_count ?? 0);
+  const bmi = Number(user.bmi_count ?? 0);
+  const game = Number(user.game_count ?? 0);
+  const boxing = Number(user.boxing_count ?? 0);
+  const total = workout + bmi + game + boxing;
+
+  if (total === 0) {
+    return <span className="text-gray-600 text-xs italic">no activity</span>;
+  }
+
+  const parts: { label: string; value: number; color: string }[] = [
+    { label: "workout", value: workout, color: "text-red-400" },
+    { label: "BMI", value: bmi, color: "text-purple-400" },
+    { label: "game", value: game, color: "text-blue-400" },
+    { label: "boxing", value: boxing, color: "text-orange-400" },
+  ].filter(p => p.value > 0);
+
+  return (
+    <span className="text-xs text-gray-500 flex items-center gap-1">
+      <span className="text-gray-700">·</span>
+      {parts.map((p, i) => (
+        <span key={p.label}>
+          <strong className={p.color}>{p.value}</strong>{" "}
+          <span>{p.label}{p.value !== 1 ? "s" : ""}</span>
+          {i < parts.length - 1 && <span className="text-gray-700 mx-0.5">·</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function UserRow({
   user,
   isOwn,
@@ -71,7 +103,7 @@ function UserRow({
           <span className="text-gray-400 text-xs truncate">{String(user.email || "—")}</span>
           {isOwn && <span className="text-yellow-500 text-xs">(you)</span>}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           <Badge className={`text-xs px-1.5 py-0 flex items-center gap-1 ${methodColor}`}>
             <MethodIcon size={10} />
             {method}
@@ -79,6 +111,7 @@ function UserRow({
           {user.has_password && (
             <span className="text-gray-500 text-xs">password set</span>
           )}
+          <ActivityCounts user={user} />
         </div>
       </div>
       <span className="text-gray-500 text-xs shrink-0 mr-2">{formatDate(String(user.created_at))}</span>

@@ -156,7 +156,11 @@ export async function registerRoutes(
         SELECT id, email, name, picture,
                COALESCE(auth_provider, 'google') AS login_method,
                CASE WHEN password_hash IS NOT NULL THEN true ELSE false END AS has_password,
-               created_at::text
+               created_at::text,
+               (SELECT COUNT(*) FROM workout_sessions  WHERE user_id = users.id)::int AS workout_count,
+               (SELECT COUNT(*) FROM bmi_entries       WHERE user_id = users.id)::int AS bmi_count,
+               (SELECT COUNT(*) FROM game_sessions     WHERE user_id = users.id)::int AS game_count,
+               (SELECT COUNT(*) FROM boxing_sessions   WHERE user_id = users.id)::int AS boxing_count
         FROM users
         ORDER BY created_at DESC NULLS LAST
       `);
