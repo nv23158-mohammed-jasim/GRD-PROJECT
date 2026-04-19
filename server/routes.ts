@@ -140,6 +140,27 @@ export async function registerRoutes(
   const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "mohammednv23158@gmail.com")
     .split(",").map(e => e.trim().toLowerCase());
 
+  app.get("/api/admin/users", requireAuth, async (req, res) => {
+    const u = userIdentity(req);
+    if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    const { pool } = await import("./db");
+    try {
+      const r = await pool.query(`
+        SELECT id, email, name, picture,
+               COALESCE(auth_provider, 'google') AS login_method,
+               CASE WHEN password_hash IS NOT NULL THEN true ELSE false END AS has_password,
+               created_at::text
+        FROM users
+        ORDER BY created_at DESC NULLS LAST
+      `);
+      res.json(r.rows);
+    } catch (e) {
+      res.status(500).json({ message: String(e) });
+    }
+  });
+
   app.get("/api/admin/search", requireAuth, async (req, res) => {
     const u = userIdentity(req);
     if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {

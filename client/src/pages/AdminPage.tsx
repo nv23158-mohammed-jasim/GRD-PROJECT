@@ -5,16 +5,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck } from "lucide-react";
+import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw, UserCheck, Mail, Chrome } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_EMAIL = "mohammednv23158@gmail.com";
 
-type TableFilter = "all" | "bmi" | "workout" | "game" | "boxing";
+type TableFilter = "all" | "bmi" | "workout" | "game" | "boxing" | "users";
 
 const TABLE_TABS: { key: TableFilter; label: string; icon: React.ReactNode; color: string }[] = [
   { key: "all", label: "All Records", icon: <Users size={14} />, color: "bg-gray-700" },
+  { key: "users", label: "Users", icon: <UserCheck size={14} />, color: "bg-green-700" },
   { key: "bmi", label: "BMI", icon: <Heart size={14} />, color: "bg-purple-700" },
   { key: "workout", label: "Workout", icon: <Dumbbell size={14} />, color: "bg-red-700" },
   { key: "game", label: "Neon Run", icon: <Gamepad2 size={14} />, color: "bg-blue-700" },
@@ -26,6 +27,44 @@ function formatDate(d: string) {
     day: "2-digit", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
+}
+
+function UserRow({ user }: { user: Record<string, unknown> }) {
+  const method = String(user.login_method || "google");
+  const methodColor = method === "email"
+    ? "bg-blue-900 text-blue-300"
+    : method === "microsoft"
+    ? "bg-cyan-900 text-cyan-300"
+    : "bg-red-900 text-red-300";
+  const MethodIcon = method === "email" ? Mail : Chrome;
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-600 transition-colors">
+      {user.picture ? (
+        <img src={String(user.picture)} alt="" className="w-8 h-8 rounded-full shrink-0" />
+      ) : (
+        <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0">
+          <span className="text-gray-300 text-sm font-bold">{String(user.name || "?")[0].toUpperCase()}</span>
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-white font-medium text-sm">{String(user.name || "—")}</span>
+          <span className="text-gray-400 text-xs truncate">{String(user.email || "—")}</span>
+        </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <Badge className={`text-xs px-1.5 py-0 flex items-center gap-1 ${methodColor}`}>
+            <MethodIcon size={10} />
+            {method}
+          </Badge>
+          {user.has_password && (
+            <span className="text-gray-500 text-xs">password set</span>
+          )}
+        </div>
+      </div>
+      <span className="text-gray-500 text-xs shrink-0">{formatDate(String(user.created_at))}</span>
+    </div>
+  );
 }
 
 function RecordRow({ row }: { row: Record<string, unknown> }) {
@@ -79,10 +118,7 @@ export default function AdminPage() {
         if (info.error) return `${tbl}: ERROR — ${info.error}`;
         return `${tbl}: ${info.nullBefore} null → updated ${info.updated} → ${info.stillNull} remaining`;
       });
-      toast({
-        title: `Backfill complete — ${data.updated} rows updated`,
-        description: lines.join("\n"),
-      });
+      toast({ title: `Backfill complete — ${data.updated} rows updated`, description: lines.join("\n") });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
     },
@@ -97,10 +133,7 @@ export default function AdminPage() {
         if (info.error) return `${tbl}: ERROR — ${info.error}`;
         return `${tbl}: ${info.orphansBefore} orphans → claimed ${info.claimed}`;
       });
-      toast({
-        title: `Claimed ${data.claimed} orphan records + backfilled ${data.backfill?.updated ?? 0}`,
-        description: lines.join("\n"),
-      });
+      toast({ title: `Claimed ${data.claimed} orphan records + backfilled ${data.backfill?.updated ?? 0}`, description: lines.join("\n") });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/search"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/counts"] });
     },
@@ -112,7 +145,13 @@ export default function AdminPage() {
     queryFn: () =>
       apiRequest("GET", `/api/admin/search?search=${encodeURIComponent(activeSearch)}&table=${table}`)
         .then(r => r.json()),
-    enabled: isAdmin,
+    enabled: isAdmin && table !== "users",
+  });
+
+  const { data: allUsers = [], isLoading: usersLoading } = useQuery<Record<string, unknown>[]>({
+    queryKey: ["/api/admin/users"],
+    queryFn: () => apiRequest("GET", "/api/admin/users").then(r => r.json()),
+    enabled: isAdmin && table === "users",
   });
 
   const { data: counts } = useQuery<Record<string, number | string>>({
@@ -135,36 +174,34 @@ export default function AdminPage() {
   }
 
   const handleSearch = () => setActiveSearch(search);
+  const filteredUsers = allUsers.filter(u =>
+    !activeSearch ||
+    String(u.name).toLowerCase().includes(activeSearch.toLowerCase()) ||
+    String(u.email).toLowerCase().includes(activeSearch.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
       <div className="border-b border-gray-800 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={() => navigate("/")}
-          className="text-gray-400 hover:text-white transition-colors"
-          data-testid="button-back"
-        >
+        <button onClick={() => navigate("/")} className="text-gray-400 hover:text-white transition-colors" data-testid="button-back">
           <ArrowLeft size={20} />
         </button>
         <h1 className="text-lg font-bold text-red-500">Admin Panel</h1>
         <div className="ml-auto flex items-center gap-2">
           <Button
             data-testid="button-claim-orphans"
-            size="sm"
-            variant="outline"
+            size="sm" variant="outline"
             className="border-green-700 text-green-400 hover:bg-green-900/30 gap-1.5 text-xs"
             onClick={() => claimMutation.mutate()}
             disabled={claimMutation.isPending}
-            title="Assign all records with no owner to your account, then fill in names/emails"
           >
             <UserCheck size={13} className={claimMutation.isPending ? "animate-spin" : ""} />
             {claimMutation.isPending ? "Claiming…" : "Claim My Records"}
           </Button>
           <Button
             data-testid="button-backfill"
-            size="sm"
-            variant="outline"
+            size="sm" variant="outline"
             className="border-yellow-700 text-yellow-400 hover:bg-yellow-900/30 gap-1.5 text-xs"
             onClick={() => backfillMutation.mutate()}
             disabled={backfillMutation.isPending}
@@ -173,12 +210,12 @@ export default function AdminPage() {
             {backfillMutation.isPending ? "Fixing…" : "Fix NULL Records"}
           </Button>
           <span className="text-gray-500 text-sm">
-            {records.length} record{records.length !== 1 ? "s" : ""}
+            {table === "users" ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""}` : `${records.length} record${records.length !== 1 ? "s" : ""}`}
           </span>
         </div>
       </div>
 
-      {/* DB totals bar — shows real counts directly from the database */}
+      {/* DB totals bar */}
       {counts && (
         <div className="border-b border-gray-800 bg-gray-950 px-4 py-2 flex items-center gap-4 text-xs text-gray-400 flex-wrap">
           <span className="font-semibold text-gray-300">DB totals:</span>
@@ -204,25 +241,18 @@ export default function AdminPage() {
               onKeyDown={e => e.key === "Enter" && handleSearch()}
             />
           </div>
-          <Button
-            data-testid="button-search"
-            onClick={handleSearch}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
+          <Button data-testid="button-search" onClick={handleSearch} className="bg-red-600 hover:bg-red-700 text-white">
             Search
           </Button>
           {activeSearch && (
-            <Button
-              variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800"
-              onClick={() => { setSearch(""); setActiveSearch(""); }}
-            >
+            <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800"
+              onClick={() => { setSearch(""); setActiveSearch(""); }}>
               Clear
             </Button>
           )}
         </div>
 
-        {/* Table filter tabs */}
+        {/* Tabs */}
         <div className="flex gap-2 flex-wrap">
           {TABLE_TABS.map(tab => (
             <button
@@ -241,21 +271,40 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Results */}
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : records.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            {activeSearch ? `No records found for "${activeSearch}"` : "No records found."}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {records.map((row, i) => (
-              <RecordRow key={`${row.record_type}-${row.id}-${i}`} row={row} />
-            ))}
-          </div>
+        {/* Users list */}
+        {table === "users" && (
+          usersLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">No users found.</div>
+          ) : (
+            <div className="space-y-2">
+              {filteredUsers.map((u, i) => (
+                <UserRow key={`user-${u.id}-${i}`} user={u} />
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Activity records list */}
+        {table !== "users" && (
+          isLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : records.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              {activeSearch ? `No records found for "${activeSearch}"` : "No records found."}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {records.map((row, i) => (
+                <RecordRow key={`${row.record_type}-${row.id}-${i}`} row={row} />
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>
