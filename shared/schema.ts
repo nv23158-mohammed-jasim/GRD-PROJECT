@@ -4,12 +4,14 @@ import { z } from "zod";
 
 // === TABLE DEFINITIONS ===
 
-// Users (authenticated via Google OAuth)
+// Users (authenticated via Google OAuth, Microsoft OAuth, or email/password)
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey(), // Google sub ID
+  id: varchar("id").primaryKey(),
   email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   picture: varchar("picture", { length: 500 }),
+  authProvider: varchar("auth_provider", { length: 20 }).default("google").notNull(), // 'google' | 'microsoft' | 'email'
+  passwordHash: varchar("password_hash", { length: 255 }), // only for email/password users
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
