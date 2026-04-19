@@ -377,7 +377,7 @@ export default function AdminPage() {
                 <UserRow
                   key={`user-${u.id}-${i}`}
                   user={u}
-                  isOwn={String(u.email).toLowerCase() === ADMIN_EMAIL.toLowerCase()}
+                  isOwn={String(u.id) === user?.id || String(u.email).toLowerCase() === (user?.email?.toLowerCase() ?? "")}
                   isDeleting={deleteMutation.isPending && deleteMutation.variables === String(u.id)}
                   onDelete={() => setPendingDelete({
                     id: String(u.id),

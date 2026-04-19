@@ -303,13 +303,23 @@ export class DatabaseStorage implements IStorage {
 
   async adminDeleteUser(userId: string): Promise<{ deleted: boolean; recordsRemoved: number }> {
     const { pool } = await import("./db");
-    let recordsRemoved = 0;
-    for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
-      const r = await pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
-      recordsRemoved += r.rowCount ?? 0;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      let recordsRemoved = 0;
+      for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
+        const r = await client.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
+        recordsRemoved += r.rowCount ?? 0;
+      }
+      const r = await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query("COMMIT");
+      return { deleted: (r.rowCount ?? 0) > 0, recordsRemoved };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-    const r = await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
-    return { deleted: (r.rowCount ?? 0) > 0, recordsRemoved };
   }
 }
 
