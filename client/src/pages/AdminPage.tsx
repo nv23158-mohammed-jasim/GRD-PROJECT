@@ -327,7 +327,7 @@ export default function AdminPage() {
       const q = activeSearch.toLowerCase();
       if (!String(u.name).toLowerCase().includes(q) && !String(u.email).toLowerCase().includes(q)) return false;
     }
-    if (methodFilter !== "all" && String(u.login_method) !== methodFilter) return false;
+    if (methodFilter !== "all" && String(u.login_method || "google") !== methodFilter) return false;
     return true;
   });
 
