@@ -19,8 +19,6 @@ import { Search, ArrowLeft, Users, Dumbbell, Gamepad2, Swords, Heart, RefreshCw,
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-const ADMIN_EMAIL = "mohammednv23158@gmail.com";
-
 type TableFilter = "all" | "bmi" | "workout" | "game" | "boxing" | "users";
 
 const TABLE_TABS: { key: TableFilter; label: string; icon: React.ReactNode; color: string }[] = [
@@ -144,8 +142,16 @@ export default function AdminPage() {
   const [table, setTable] = useState<TableFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string; email: string } | null>(null);
 
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const { toast } = useToast();
+
+  const { data: adminCheck, isLoading: adminCheckLoading } = useQuery<{ isAdmin: boolean }>({
+    queryKey: ["/api/admin/check"],
+    queryFn: () => apiRequest("GET", "/api/admin/check").then(r => r.json()),
+    enabled: !!user,
+    retry: false,
+  });
+
+  const isAdmin = adminCheck?.isAdmin === true;
 
   const backfillMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/backfill").then(r => r.json()),
@@ -215,6 +221,14 @@ export default function AdminPage() {
     enabled: isAdmin,
     staleTime: 30_000,
   });
+
+  if (adminCheckLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (

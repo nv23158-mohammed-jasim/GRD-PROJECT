@@ -140,6 +140,11 @@ export async function registerRoutes(
   const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "mohammednv23158@gmail.com")
     .split(",").map(e => e.trim().toLowerCase());
 
+  app.get("/api/admin/check", requireAuth, (req, res) => {
+    const u = userIdentity(req);
+    res.json({ isAdmin: ADMIN_EMAILS.includes(u.email.toLowerCase()) });
+  });
+
   app.get("/api/admin/users", requireAuth, async (req, res) => {
     const u = userIdentity(req);
     if (!ADMIN_EMAILS.includes(u.email.toLowerCase())) {
