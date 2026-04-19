@@ -322,6 +322,30 @@ export default function AdminPage() {
   }
 
   const handleSearch = () => setActiveSearch(search);
+
+  function exportCSV() {
+    const headers = ["Name", "Email", "Login Method", "Signup Date", "Workout Count", "BMI Count", "Game Count", "Boxing Count"];
+    const rows = filteredUsers.map(u => [
+      String(u.name ?? ""),
+      String(u.email ?? ""),
+      String(u.login_method ?? "google"),
+      u.created_at ? new Date(String(u.created_at)).toISOString() : "",
+      String(u.workout_count ?? 0),
+      String(u.bmi_count ?? 0),
+      String(u.game_count ?? 0),
+      String(u.boxing_count ?? 0),
+    ]);
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const csv = [headers.map(escape).join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const suffix = methodFilter !== "all" ? `-${methodFilter}` : "";
+    a.download = `users${suffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   const filteredUsers = allUsers.filter(u => {
     if (activeSearch) {
       const q = activeSearch.toLowerCase();
@@ -482,39 +506,17 @@ export default function AdminPage() {
               </button>
             ))}
             <div className="flex-1" />
-            <button
+            <Button
               data-testid="button-export-csv"
-              onClick={() => {
-                const rows = filteredUsers;
-                if (rows.length === 0) return;
-                const headers = ["Name", "Email", "Login Method", "Signup Date", "Workouts", "BMI Logs", "Games", "Boxing Sessions"];
-                const csvRows = [
-                  headers.join(","),
-                  ...rows.map(u => [
-                    `"${String(u.name || "").replace(/"/g, '""')}"`,
-                    `"${String(u.email || "").replace(/"/g, '""')}"`,
-                    String(u.login_method || "google"),
-                    u.created_at ? new Date(String(u.created_at)).toISOString().slice(0, 10) : "",
-                    String(u.workout_count ?? 0),
-                    String(u.bmi_count ?? 0),
-                    String(u.game_count ?? 0),
-                    String(u.boxing_count ?? 0),
-                  ].join(","))
-                ];
-                const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `lab-users-${new Date().toISOString().slice(0, 10)}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              title="Export visible users as CSV"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gray-900 text-gray-400 hover:bg-gray-800 border border-gray-800 transition-colors"
+              size="sm"
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800 gap-1.5 text-xs"
+              onClick={exportCSV}
+              disabled={filteredUsers.length === 0}
             >
-              <Download size={12} />
+              <Download size={13} />
               Export CSV
-            </button>
+            </Button>
           </div>
         )}
 
