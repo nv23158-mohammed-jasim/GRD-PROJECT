@@ -212,6 +212,7 @@ export default function AdminPage() {
   const [activeSearch, setActiveSearch] = useState("");
   const [table, setTable] = useState<TableFilter>("all");
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [methodFilter, setMethodFilter] = useState<"all" | "google" | "email">("all");
 
   const { toast } = useToast();
 
@@ -321,11 +322,14 @@ export default function AdminPage() {
   }
 
   const handleSearch = () => setActiveSearch(search);
-  const filteredUsers = allUsers.filter(u =>
-    !activeSearch ||
-    String(u.name).toLowerCase().includes(activeSearch.toLowerCase()) ||
-    String(u.email).toLowerCase().includes(activeSearch.toLowerCase())
-  );
+  const filteredUsers = allUsers.filter(u => {
+    if (activeSearch) {
+      const q = activeSearch.toLowerCase();
+      if (!String(u.name).toLowerCase().includes(q) && !String(u.email).toLowerCase().includes(q)) return false;
+    }
+    if (methodFilter !== "all" && String(u.login_method) !== methodFilter) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -456,6 +460,29 @@ export default function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* Login method filter — only shown on Users tab */}
+        {table === "users" && (
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-xs">Filter:</span>
+            {(["all", "google", "email"] as const).map(m => (
+              <button
+                key={m}
+                data-testid={`filter-method-${m}`}
+                onClick={() => setMethodFilter(m)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  methodFilter === m
+                    ? m === "google" ? "bg-red-800 text-white"
+                      : m === "email" ? "bg-blue-800 text-white"
+                      : "bg-gray-600 text-white"
+                    : "bg-gray-900 text-gray-400 hover:bg-gray-800 border border-gray-800"
+                }`}
+              >
+                {m === "all" ? "All" : m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Users list */}
         {table === "users" && (
