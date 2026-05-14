@@ -23,3 +23,9 @@ id = "BFIQ-sN3aaefbMmN9J0x1"
 uri = "file://project.zip"
 type = "unspecified"
 title = "Fitness Tracker — Full Project (.zip)"
+
+[[outputs]]
+id = "UzlJfWgGFTsQHOfBGJXxo"
+uri = "file://attached_assets/LAB_Project_Presentation.pptx"
+type = "slides"
+title = "LAB Project Presentation"
