@@ -119,11 +119,11 @@ p.alignment = PP_ALIGN.CENTER
 r = p.add_run(); r.text = "LAB"
 r.font.size = Pt(140); r.font.bold = True; r.font.color.rgb = RED; r.font.name = "Calibri"
 
-add_text(s, "AI-Powered Fitness Tracking & Pose Detection",
+add_text(s, "Smart Fitness App with AI Camera Coach",
          Inches(0.5), Inches(3.4), Inches(12.3), Inches(0.6),
          size=26, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
 
-add_text(s, "Graduation Project Report  •  2026",
+add_text(s, "Graduation Project  •  2026",
          Inches(0.5), Inches(4.05), Inches(12.3), Inches(0.4),
          size=16, color=GRAY, align=PP_ALIGN.CENTER)
 
@@ -245,21 +245,21 @@ add_footer(s, 3)
 s = prs.slides.add_slide(blank); add_bg(s, BLACK)
 add_section_header(s, "03  ·  ABOUT THE PROJECT", "Brief Description")
 
-desc = ("LAB is a full-stack web application that turns any device with a camera "
-        "into a personal AI fitness coach. It uses TensorFlow.js and the MoveNet "
-        "pose-detection model to track the user's body in real time, count "
-        "repetitions, and grade exercise form — no wearables or sensors required.")
+desc = ("LAB is a website that uses your phone or laptop camera to act like a "
+        "personal fitness coach. It watches your body while you move, counts "
+        "your reps, and tells you if your form is good or bad. You do not need "
+        "a smart watch or any other device — just a camera.")
 add_text(s, desc, Inches(0.8), Inches(2.05), Inches(11.7), Inches(1.5),
          size=17, color=LIGHT_GRAY, align=PP_ALIGN.LEFT)
 
 # Three feature cards
 features = [
-    ("Workout Tracking",
-     "Push-ups, squats, plank with live rep counting and form grading."),
+    ("Workout Tracker",
+     "Do push-ups, squats, and plank. The app counts your reps and grades you."),
     ("Neon Run Game",
-     "Side-scrolling game controlled by jogging, jumping, and push-ups."),
+     "A running game you play with your body. Jog to run and jump to skip enemies."),
     ("Boxing Mode",
-     "Shadow-boxing trainer with punches, dodges, and blocks detected by camera."),
+     "A shadow-boxing trainer. Throw punches, dodge, and block using your body."),
 ]
 card_w = Inches(3.9); card_h = Inches(2.5); top = Inches(4.0)
 for i, (title, body) in enumerate(features):
@@ -288,23 +288,23 @@ add_section_header(s, "04  ·  WHY WE BUILT IT", "Purpose & Target Beneficiaries
 add_text(s, "PURPOSE", Inches(0.8), Inches(2.05), Inches(6), Inches(0.4),
          size=13, bold=True, color=RED_LIGHT)
 purpose_items = [
-    "Make professional fitness coaching accessible to everyone, for free.",
-    "Replace expensive wearables and personal trainers with a phone or laptop camera.",
-    "Use AI to give real-time feedback on form, posture, and rep count.",
-    "Make exercise fun through gamification (Neon Run, Boxing Mode).",
+    "Give everyone a free fitness coach that anyone can use at home.",
+    "Replace costly smart watches and gym trainers with just a camera.",
+    "Use AI to check your form and count your reps live, while you train.",
+    "Make exercise fun by turning it into games like Neon Run and Boxing.",
 ]
 add_bullets(s, purpose_items, Inches(0.8), Inches(2.5),
             Inches(11.7), Inches(2.5), size=15)
 
 # Beneficiaries
-add_text(s, "TARGET BENEFICIARIES", Inches(0.8), Inches(4.95),
+add_text(s, "WHO WILL USE IT", Inches(0.8), Inches(4.95),
          Inches(6), Inches(0.4), size=13, bold=True, color=RED_LIGHT)
 
 beneficiaries = [
-    ("Home Users", "People who can't afford gyms"),
-    ("Students", "Quick fitness breaks"),
-    ("Beginners", "Need form guidance"),
-    ("Gamers", "Active gameplay"),
+    ("Home Users", "People with no gym"),
+    ("Students", "Short workout breaks"),
+    ("Beginners", "Need help with form"),
+    ("Gamers", "Want to move and play"),
 ]
 card_w = Inches(2.85); card_h = Inches(1.55); top = Inches(5.4)
 for i, (title, sub) in enumerate(beneficiaries):
@@ -334,23 +334,23 @@ status.fill.solid(); status.fill.fore_color.rgb = RED
 status.line.fill.background()
 tf = status.text_frame; tf.margin_top = Inches(0.18)
 p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
-r = p.add_run(); r.text = "✓  FULLY DEPLOYED & LIVE IN PRODUCTION"
+r = p.add_run(); r.text = "✓  FINISHED — APP IS LIVE AND WORKING ONLINE"
 r.font.size = Pt(28); r.font.bold = True; r.font.color.rgb = WHITE
 
 # Tech stack grid
-add_text(s, "WHAT'S COMPLETE", Inches(0.8), Inches(3.35),
+add_text(s, "WHAT IS DONE", Inches(0.8), Inches(3.35),
          Inches(6), Inches(0.4), size=13, bold=True, color=RED_LIGHT)
 
 complete = [
-    "Full React + TypeScript frontend with dark fitness theme",
-    "Node.js + Express REST API backend with type-safe contracts",
-    "PostgreSQL database (Neon) with Drizzle ORM",
-    "Google OAuth, Microsoft OAuth, and Email/Password login (JWT-based)",
-    "Real-time pose detection for push-ups, squats, and plank",
-    "Neon Run game with 5 unlockable stages and 3 enemy types",
-    "Boxing Mode with rounds, voice commands, and scoring",
-    "Admin panel with user management, audit logs, and search",
-    "Production deployment: Render (backend) + AWS Amplify (frontend)",
+    "Full website built with a modern dark fitness design",
+    "A server that handles all user requests in a safe and fast way",
+    "An online database that saves all user data",
+    "Three ways to log in: Google, Microsoft, or email and password",
+    "Live AI camera that tracks push-ups, squats, and plank",
+    "Neon Run game with 5 levels and 3 enemy types",
+    "Boxing Mode with rounds, voice cues, and a score system",
+    "Admin page to manage users, see actions, and search",
+    "App is online: server on Render, website on AWS Amplify",
 ]
 add_bullets(s, complete, Inches(0.8), Inches(3.8),
             Inches(11.7), Inches(3.2), size=14, line_spacing=1.15)
@@ -364,16 +364,16 @@ s = prs.slides.add_slide(blank); add_bg(s, BLACK)
 add_section_header(s, "06  ·  WHAT WE LEARNED", "Challenges Faced During Development")
 
 challenges = [
-    ("Cross-site cookies blocked on iOS Safari",
-     "Frontend on Amplify and backend on Render are different domains. Safari blocked our session cookies. We solved it by switching authentication to JWT tokens stored in localStorage and sent as Authorization headers."),
-    ("Pose detection accuracy & calibration",
-     "Tuning the MoveNet model thresholds for push-up depth, squat angles, and plank alignment took many iterations to feel natural across different body types and camera angles."),
-    ("Cloud cold starts",
-     "Render's free tier puts the backend to sleep after 15 minutes of inactivity. First request after sleep takes 30+ seconds — we documented this and explored keep-alive strategies."),
-    ("Multi-platform deployment coordination",
-     "Coordinating GitHub → Render (backend) and GitHub → Amplify (frontend) auto-deploys, plus database migrations on Neon, required careful environment-variable management across three platforms."),
-    ("Real-time game performance",
-     "Running TensorFlow.js pose detection at 30+ FPS while rendering a side-scrolling game in the same browser tab pushed performance limits. Required careful optimization of the render loop."),
+    ("Login problem on iPhone Safari",
+     "The website and the server are on two different web addresses. iPhone Safari blocked the login. We fixed it by using a safer login method that works on all phones."),
+    ("Making the AI camera accurate",
+     "It took many tries to make the AI count reps and check form correctly for different body types and camera angles."),
+    ("Slow first load on the server",
+     "Our free server goes to sleep when nobody uses it. The first visit after sleep is slow. We had to find ways to wake it up faster."),
+    ("Linking the website, server, and database",
+     "We had to connect three different services and make sure they all share the same settings and updates. This took a lot of testing."),
+    ("Running the game and AI at the same time",
+     "Playing the running game while the AI watches your body uses a lot of power. We had to make the code faster so it does not lag."),
 ]
 
 top = Inches(2.05)
@@ -403,17 +403,17 @@ add_section_header(s, "07  ·  WHAT'S NEXT", "Future Development Plans")
 
 plans = [
     ("More Exercises",
-     "Add lunges, burpees, mountain climbers, and yoga poses to the pose detection library."),
-    ("Native Mobile App",
-     "Build a React Native / Expo version for iOS and Android with offline workout caching."),
-    ("Social & Leaderboards",
-     "Friend challenges, weekly leaderboards, and sharable workout summaries."),
-    ("AI Personal Trainer",
-     "GPT-powered coach that adapts difficulty, builds custom plans, and gives voice cues."),
-    ("Monetization",
-     "Premium tier via RevenueCat with advanced analytics, custom programs, and meal plans."),
-    ("Wearable Integration",
-     "Sync with Apple Watch and Google Fit for heart-rate and calorie accuracy."),
+     "Add lunges, burpees, mountain climbers, and yoga poses to the AI camera."),
+    ("Mobile App",
+     "Build a real app for iPhone and Android that also works without internet."),
+    ("Friends & Scores",
+     "Add friend challenges, weekly score boards, and share your results."),
+    ("Smart AI Coach",
+     "An AI coach that builds your plan, changes the level, and talks to you."),
+    ("Paid Plans",
+     "Add a premium plan with deeper stats, custom programs, and meal plans."),
+    ("Smart Watches",
+     "Connect with Apple Watch and Google Fit for heart rate and calories."),
 ]
 
 card_w = Inches(5.8); card_h = Inches(1.55)
