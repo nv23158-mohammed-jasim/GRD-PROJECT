@@ -137,9 +137,12 @@ p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
 r = p.add_run(); r.text = "IT  •  CLOUD COMPUTING  •  12.CCP"
 r.font.size = Pt(14); r.font.bold = True; r.font.color.rgb = WHITE; r.font.name = "Calibri"
 
-add_text(s, "Presented by Class 12.CCP",
+add_text(s, "Nasser Centre for Science and Technology  ·  NCST",
          Inches(0.5), Inches(5.7), Inches(12.3), Inches(0.4),
-         size=14, color=GRAY, align=PP_ALIGN.CENTER)
+         size=15, bold=True, color=WHITE, align=PP_ALIGN.CENTER)
+add_text(s, "Nominated for \"The Inventor\"  ·  Bahrain International Channel",
+         Inches(0.5), Inches(6.1), Inches(12.3), Inches(0.4),
+         size=12, color=GRAY, align=PP_ALIGN.CENTER)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SLIDE 2 — Team
