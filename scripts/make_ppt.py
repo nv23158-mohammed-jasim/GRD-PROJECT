@@ -575,6 +575,18 @@ add_text(s, "Class 12.CCP  •  Cloud Computing  •  2026",
          Inches(0.5), Inches(5.25), Inches(12.3), Inches(0.4),
          size=13, color=GRAY, align=PP_ALIGN.CENTER)
 
+# QR code — scan to visit the live app
+qr_path = "attached_assets/LAB_1778766728646.png"
+if os.path.exists(qr_path):
+    qr_size = Inches(1.7)
+    qr_left = (SW - qr_size) / 2
+    qr_top = Inches(5.7)
+    s.shapes.add_picture(qr_path, qr_left, qr_top, width=qr_size, height=qr_size)
+    add_text(s, "Scan to try the live app",
+             Inches(0.5), qr_top + qr_size + Inches(0.05),
+             Inches(12.3), Inches(0.3),
+             size=11, color=GRAY, align=PP_ALIGN.CENTER)
+
 # Save
 out = "attached_assets/LAB_Project_Presentation.pptx"
 prs.save(out)
