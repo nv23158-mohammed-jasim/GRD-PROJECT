@@ -493,38 +493,41 @@ add_footer(s, 9)
 s = prs.slides.add_slide(blank); add_bg(s, BLACK)
 add_section_header(s, "09  ·  GALLERY", "Project Photos")
 
-# Try to embed up to 4 screenshot placeholders
-photo_paths = [
-    "attached_assets/image_1776638568991.png",
-    "attached_assets/image_1776634602123.png",
-    "attached_assets/image_1776633549672.png",
-    "attached_assets/image_1776633503273.png",
+# Real screenshots from the LAB app with short captions
+photos = [
+    ("attached_assets/Screenshot_(1320)_1778766425623.png", "Login Screen"),
+    ("attached_assets/Screenshot_(1321)_1778766425625.png", "Home Dashboard"),
+    ("attached_assets/Screenshot_(1325)_1778766425632.png", "BMI Fitness Profile"),
+    ("attached_assets/Screenshot_(1322)_1778766425627.png", "Personal Bests & Progress"),
+    ("attached_assets/Screenshot_(1323)_1778766425629.png", "Workout History"),
+    ("attached_assets/Screenshot_(1324)_1778766425630.png", "Navigation Menu"),
 ]
-photo_paths = [p for p in photo_paths if os.path.exists(p)]
+photos = [(p, c) for (p, c) in photos if os.path.exists(p)]
 
-if photo_paths:
-    cols = 2
-    cell_w = Inches(5.9); cell_h = Inches(2.35)
-    start_left = Inches(0.8); start_top = Inches(2.1)
-    gap_x = Inches(0.1); gap_y = Inches(0.15)
-    for i, path in enumerate(photo_paths[:4]):
+if photos:
+    cols = 3; rows = 2
+    cell_w = Inches(4.0); cell_h = Inches(2.15)
+    cap_h = Inches(0.3)
+    start_left = Inches(0.55); start_top = Inches(2.05)
+    gap_x = Inches(0.1); gap_y = Inches(0.25)
+    for i, (path, caption) in enumerate(photos[:6]):
         col = i % cols; row = i // cols
         left = start_left + (cell_w + gap_x) * col
-        top = start_top + (cell_h + gap_y) * row
+        top = start_top + (cell_h + cap_h + gap_y) * row
         # frame
         frame = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, cell_w, cell_h)
         frame.fill.solid(); frame.fill.fore_color.rgb = DARK
         frame.line.color.rgb = RED; frame.line.width = Pt(1)
         # image fitted inside
         try:
-            s.shapes.add_picture(path, left + Inches(0.05), top + Inches(0.05),
-                                  width=cell_w - Inches(0.1), height=cell_h - Inches(0.1))
+            s.shapes.add_picture(path, left + Inches(0.04), top + Inches(0.04),
+                                  width=cell_w - Inches(0.08), height=cell_h - Inches(0.08))
         except Exception:
             pass
-
-    add_text(s, "Screenshots from the LAB project (database, admin panel, app UI)",
-             Inches(0.8), Inches(7.0), Inches(11.7), Inches(0.3),
-             size=11, color=GRAY, align=PP_ALIGN.CENTER)
+        # caption
+        add_text(s, caption, left, top + cell_h + Inches(0.02),
+                 cell_w, cap_h, size=12, bold=True, color=WHITE,
+                 align=PP_ALIGN.CENTER)
 else:
     box = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
                              Inches(2.5), Inches(2.5), Inches(8.3), Inches(3.5))
