@@ -15,9 +15,30 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   useEffect(() => {
     if (!isLoading && isAuthenticated) navigate("/");
   }, [isLoading, isAuthenticated, navigate]);
+
+  async function handleGuest() {
+    setError("");
+    setGuestLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/guest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.message || "Could not start guest session"); return; }
+
+      localStorage.setItem("auth_token", data.token);
+      window.location.href = "/";
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setGuestLoading(false);
+    }
+  }
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,6 +135,24 @@ export default function LoginPage() {
                 >
                   Don't have an account? <span className="text-red-400 font-medium">Create one</span>
                 </button>
+
+                <div className="w-full flex items-center gap-3">
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-zinc-600 text-xs">or</span>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                </div>
+
+                <Button
+                  onClick={handleGuest}
+                  disabled={guestLoading}
+                  className="w-full h-12 bg-transparent hover:bg-zinc-900 border border-zinc-800 text-zinc-300 font-semibold text-base rounded-xl transition-all"
+                  data-testid="button-guest-login"
+                >
+                  {guestLoading ? "Starting..." : "Continue as Guest"}
+                </Button>
+                <p className="text-zinc-600 text-xs text-center px-4">
+                  Guest sessions are temporary — your activity is deleted when you log out.
+                </p>
               </div>
             </>
           )}

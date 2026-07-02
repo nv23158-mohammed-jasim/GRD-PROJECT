@@ -24,7 +24,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   picture: varchar("picture", { length: 500 }),
-  authProvider: varchar("auth_provider", { length: 20 }).default("google").notNull(), // 'google' | 'microsoft' | 'email'
+  authProvider: varchar("auth_provider", { length: 20 }).default("google").notNull(), // 'google' | 'microsoft' | 'email' | 'guest'
   passwordHash: varchar("password_hash", { length: 255 }), // only for email/password users
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -10,6 +10,7 @@ import { pool, db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { storage } from "./storage";
 
 // Firebase Admin (optional — only initialised if FIREBASE_SERVICE_ACCOUNT is set)
 let firebaseAdmin: any = null;
@@ -201,7 +202,40 @@ export function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.post("/auth/logout", (req, res) => { req.logout(() => res.json({ ok: true })); });
+  // ── Guest Login ───────────────────────────────────────────────────────────
+  // Creates a throwaway user with a short-lived (6h) token. The guest row and all
+  // its activity are deleted on logout, and stale guests are swept periodically.
+  app.post("/auth/guest", async (req, res) => {
+    try {
+      const id = `guest_${randomUUID()}`;
+      const [created] = await db.insert(users).values({
+        id,
+        email: `${id}@guest.local`,
+        name: "Guest",
+        picture: null,
+        authProvider: "guest",
+      }).returning();
+      const token = jwt.sign({ id: created.id }, JWT_SECRET, { expiresIn: "6h" });
+      res.json({ token, user: { id: created.id, email: created.email, name: created.name, picture: created.picture } });
+    } catch {
+      res.status(500).json({ message: "Guest login failed" });
+    }
+  });
+
+  app.post("/auth/logout", async (req, res) => {
+    // If a guest is logging out, delete their user row and all their activity.
+    // This must be strict: if cleanup fails we return an error so the client keeps
+    // the session and can retry, guaranteeing guest data is not silently orphaned.
+    try {
+      const tokenUser = await getUserFromToken(req);
+      if (tokenUser && tokenUser.authProvider === "guest") {
+        await storage.deleteGuestData(tokenUser.id);
+      }
+    } catch {
+      return res.status(500).json({ message: "Logout cleanup failed. Please try again." });
+    }
+    req.logout(() => res.json({ ok: true }));
+  });
 
   app.get("/api/auth/me", async (req, res) => {
     const tokenUser = await getUserFromToken(req);
@@ -209,4 +243,13 @@ export function setupAuth(app: Express) {
     if (req.isAuthenticated() && req.user) return res.json(req.user);
     res.status(401).json({ message: "Not authenticated" });
   });
+
+  // ── Stale guest cleanup ───────────────────────────────────────────────────
+  // Guests who never logged out (closed the tab, etc.) are swept away once their
+  // token can no longer be valid. Runs once at startup and then every hour.
+  const sweepGuests = () => {
+    storage.cleanupStaleGuests(6).catch(() => { /* non-critical */ });
+  };
+  sweepGuests();
+  setInterval(sweepGuests, 60 * 60 * 1000);
 }

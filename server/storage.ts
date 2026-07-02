@@ -39,6 +39,10 @@ export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | null>;
 
+  // Guest methods
+  deleteGuestData(userId: string): Promise<void>;
+  cleanupStaleGuests(hours?: number): Promise<number>;
+
   // BMI entry methods
   getBmiEntries(userId: string): Promise<BmiEntryResponse[]>;
   createBmiEntry(entry: CreateBmiEntryRequest, user: UserIdentity): Promise<BmiEntryResponse>;
@@ -72,6 +76,61 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | null> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || null;
+  }
+
+  // Guest methods
+  async deleteGuestData(userId: string): Promise<void> {
+    const { pool } = await import("./db");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Self-protection: verify this is a guest BEFORE deleting any activity, so a
+      // non-guest id (bug/regression) can never wipe a real user's records.
+      const check = await client.query(
+        `SELECT 1 FROM users WHERE id = $1 AND auth_provider = 'guest'`,
+        [userId]
+      );
+      if (check.rowCount === 0) {
+        await client.query("ROLLBACK");
+        return;
+      }
+      for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
+        await client.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
+      }
+      await client.query(`DELETE FROM users WHERE id = $1 AND auth_provider = 'guest'`, [userId]);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async cleanupStaleGuests(hours = 6): Promise<number> {
+    const { pool } = await import("./db");
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const stale = await client.query(
+        `SELECT id FROM users WHERE auth_provider = 'guest' AND created_at < now() - ($1 || ' hours')::interval`,
+        [String(hours)]
+      );
+      const ids = stale.rows.map((r: { id: string }) => r.id);
+      if (ids.length > 0) {
+        for (const tbl of ["bmi_entries", "workout_sessions", "game_sessions", "boxing_sessions"]) {
+          await client.query(`DELETE FROM ${tbl} WHERE user_id = ANY($1)`, [ids]);
+        }
+        await client.query(`DELETE FROM users WHERE id = ANY($1)`, [ids]);
+      }
+      await client.query("COMMIT");
+      return ids.length;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   // BMI entry methods

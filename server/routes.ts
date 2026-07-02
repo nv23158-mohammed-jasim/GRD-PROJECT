@@ -162,6 +162,7 @@ export async function registerRoutes(
                (SELECT COUNT(*) FROM game_sessions     WHERE user_id = users.id)::int AS game_count,
                (SELECT COUNT(*) FROM boxing_sessions   WHERE user_id = users.id)::int AS boxing_count
         FROM users
+        WHERE COALESCE(auth_provider, 'google') <> 'guest'
         ORDER BY created_at DESC NULLS LAST
       `);
       res.json(r.rows);

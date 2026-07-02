@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, API_BASE_URL, clearAuthToken } from "@/lib/queryClient";
+import { queryClient, API_BASE_URL, clearAuthToken, getAuthToken } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 
 export function useAuth() {
@@ -11,12 +11,17 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      clearAuthToken();
+      // Send the token so the server can identify (and clean up) guest sessions.
+      // Only drop the local token AFTER a successful response — if guest cleanup
+      // fails the session is kept so logout can be retried.
+      const token = getAuthToken();
       const res = await fetch(`${API_BASE_URL}/auth/logout`, {
         method: "POST",
         credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Logout failed");
+      clearAuthToken();
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/me"], null);
