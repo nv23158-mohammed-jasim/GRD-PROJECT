@@ -1,0 +1,99 @@
+Mini Build Test
+YOUR MINI BUILD TEST · CNCT CRM
+15–30 MIN · USE AI
+CNCT lead → HubSpot contact
+Write a code snippet that takes a CNCT lead object and converts it into a HubSpot contact payload with a lead score.
+
+Validate required fields
+Normalize email (lowercase, trim)
+Calculate a simple lead score (urgency high +30, budget high +30, company +10, phone +10, message >30 chars +20)
+Add recommended_action (80+ create deal & assign owner; 50–79 nurture; <50 contact only)
+Return a HubSpot-style JSON payload
+Return clear errors if required fields are missing
+SAMPLE INPUT
+{
+  "firstName": "Sara",
+  "lastName": "Ahmed",
+  "email": "SARA@ACME.COM",
+  "company": "Acme Trading",
+  "phone": "+97300000000",
+  "message": "We need an AI customer support solution for WhatsApp and Instagram.",
+  "urgency": "high",
+  "budgetRange": "high"
+}
+EXPECTED OUTPUT
+{
+  "properties": {
+    "email": "sara@acme.com",
+    "firstname": "Sara",
+    "lastname": "Ahmed",
+    "company": "Acme Trading",
+    "phone": "+97300000000",
+    "lifecyclestage": "lead",
+    "message": "We need an AI customer support solution for WhatsApp and Instagram.",
+    "lead_score": 100,
+    "recommended_action": "Create deal and assign sales owner"
+  }
+}
+Snippet only — no full plugin, app, UI, or auth flow. Just the small logic layer that proves you understand the integration.
+CODE SNIPPET
+0 / 40 chars
+
+LANGUAGE
+
+AI TOOL USED
+
+SAMPLE INPUT
+
+SAMPLE OUTPUT
+
+SHORT EXPLANATION (HOW IT WORKS)
+0 / 40 chars
+
+1–2 AI PROMPTS YOU USED
+
+WHAT YOU'D IMPROVE WITH MORE TIME
+
+PROVE YOU UNDERSTAND IT
+Two quick checks. We compare your answers against your actual code — bluffing scores zero.
+TRACE INPUT (DIFFERENT FROM THE SAMPLE ABOVE)
+{
+  "firstName": "Layla",
+  "lastName": "Hassan",
+  "email": "  LAYLA@startup.io ",
+  "company": "",
+  "phone": "",
+  "message": "Hi, just looking around.",
+  "urgency": "low",
+  "budgetRange": "low"
+}
+WHAT WOULD YOUR CODE OUTPUT FOR THIS INPUT? (EXACT JSON)
+0 / 5 chars
+
+ONE INPUT THAT WOULD BREAK YOUR SNIPPET
+0 / 3 chars
+
+WHY DOES IT BREAK? (REFERENCE YOUR CODE)
+0 / 12 chars
+
+11 FIELDS NEED ATTENTION BEFORE CONTINUING
+· Code snippet
+0 / 40 chars (40 more)
+· Language
+required
+· Sample input
+required
+· Sample output
+required
+· Explanation
+0 / 40 chars (40 more)
+· AI tool
+required
+· AI prompts
+required
+· Improvements
+required
+· Trace output
+0 / 5 chars (5 more)
+· Breaking input
+0 / 3 chars (3 more
